@@ -201,12 +201,29 @@
                             android:textStyle="bold" />
 
                         <TextView
-                            android:layout_width="wrap_content"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
+                            android:layout_weight="1"
                             android:layout_marginStart="10dp"
-                            android:text="点击右上角 「连接」 按钮"
+                            android:text="点击右上角"
                             android:textSize="14sp"
                             android:textColor="@color/text_primary" />
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_settings"
+                            android:tint="@color/primary"
+                            android:contentDescription="设置" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4dp"
+                            android:text="，配置服务器并保存"
+                            android:textSize="14sp"
+                            android:textColor="@color/text_primary" />
+
                     </LinearLayout>
 
                     <!-- Step 2 -->
@@ -231,7 +248,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="10dp"
-                            android:text="等待顶部状态点变为绿色「已连接」"
+                            android:text="点击蓝色连接按钮，等待状态点变绿「已连接」"
                             android:textSize="14sp"
                             android:textColor="@color/text_primary" />
                     </LinearLayout>
