@@ -31,4 +31,7 @@
     <string name="export_log">导出调试日志</string>
     <string name="token_hint">Token（连接局域网自建服务器时填写）</string>
     <string name="status_auth_failed">握手失败，请检查设置</string>
+    <string name="settings_saved">设置已保存</string>
+    <string name="ws_url">WebSocket 地址</string>
+    <string name="input_hint">输入消息…</string>
 </resources>

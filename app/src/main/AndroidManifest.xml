@@ -14,14 +14,19 @@
         android:networkSecurityConfig="@xml/network_security_config">
 
         <activity
-            android:name=".activities.MainActivity"
+            android:name=".activities.OnboardingActivity"
             android:exported="true"
-            android:windowSoftInputMode="adjustResize">
+            android:theme="@style/Theme.XiaoZhi">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".activities.MainActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".activities.SettingsActivity"
