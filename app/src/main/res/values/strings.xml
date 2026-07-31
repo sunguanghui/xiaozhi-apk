@@ -28,4 +28,5 @@
     <string name="bind_dialog_title">设备未绑定</string>
     <string name="bind_dialog_message">请在浏览器打开 https://xiaozhi.me，进入控制台添加设备并输入以下验证码：\n\n【 %s 】</string>
     <string name="bind_dialog_confirm">已绑定完成</string>
+    <string name="export_log">导出调试日志</string>
 </resources>

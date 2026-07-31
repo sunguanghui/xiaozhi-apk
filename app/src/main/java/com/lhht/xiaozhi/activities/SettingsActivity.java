@@ -1,14 +1,18 @@
 package com.lhht.xiaozhi.activities;
 
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Switch;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.lhht.xiaozhi.R;
 import com.lhht.xiaozhi.settings.SettingsManager;
+import com.lhht.xiaozhi.utils.LogUtils;
 
 public class SettingsActivity extends AppCompatActivity {
     private SettingsManager settingsManager;
@@ -30,6 +34,7 @@ public class SettingsActivity extends AppCompatActivity {
         enableTokenSwitch = findViewById(R.id.enableTokenSwitch);
         useOfficialServerSwitch = findViewById(R.id.useOfficialServerSwitch);
         Button saveButton = findViewById(R.id.saveButton);
+        Button exportLogButton = findViewById(R.id.exportLogButton);
 
         // 加载当前设置
         wsUrlInput.setText(settingsManager.getWsUrl());
@@ -65,6 +70,22 @@ public class SettingsActivity extends AppCompatActivity {
             settingsManager.saveDeviceId(deviceId);
             finish();
         });
+
+        // 导出日志按钮
+        exportLogButton.setOnClickListener(v ->
+                LogUtils.getInstance().startExportLog(this));
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == LogUtils.EXPORT_LOG_REQUEST_CODE
+                && resultCode == RESULT_OK && data != null) {
+            Uri uri = data.getData();
+            if (uri != null) {
+                LogUtils.getInstance().handleExportResult(this, uri);
+            }
+        }
     }
 
     /** 官方模式下禁用手动 URL / Token 输入区域 */
