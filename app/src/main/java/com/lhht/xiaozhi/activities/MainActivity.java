@@ -79,6 +79,8 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     private View statusDot;
     private ExecutorService audioExecutor;  // 音频处理线程池
     private String sessionId = ""; // 服务器 hello 里返回的 session_id
+    // TTS 停止后清空回声帧的截止时间（对齐 py-xiaozhi clear_audio_queue）
+    private volatile long flushUntilMs = 0;
     private MessageAdapter messageAdapter;  // 添加消息适配器
     private RecyclerView messagesRecyclerView;  // 添加RecyclerView引用
 
@@ -337,8 +339,11 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                     // 编码为 Opus
                     int encodedBytes = opusUtils.encode(encoderHandle, buffer, 0, encodedBuffer);
                     if (encodedBytes > 0) {
-                        // isPlaying=true 时 AI 正在说话，跳过发送防止回声
-                        if (!isPlaying) {
+                        long now = System.currentTimeMillis();
+                        // isPlaying=true：AI 正在说话，跳过发送（防止实时回声）
+                        // flushUntilMs：AudioTrack 刚排空，清空 AudioRecord 里积压的回声帧
+                        // 对齐 py-xiaozhi clear_audio_queue / xiaozhi-android waitForPlaybackCompletion
+                        if (!isPlaying && now >= flushUntilMs) {
                             byte[] encodedData = new byte[encodedBytes];
                             System.arraycopy(encodedBuffer, 0, encodedData, 0, encodedBytes);
                             webSocketManager.sendBinaryMessage(encodedData);
@@ -347,8 +352,9 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                         Log.e("XiaoZhi-Voice", "Opus编码失败: " + encodedBytes);
                     }
 
-                    // 检查静音超时(1秒)，同样只在非播放状态下发送静音帧
-                    if (!isPlaying && System.currentTimeMillis() - lastAudioTime > 1000) {
+                    // 静音超时：只在非播放且缓冲已清空时发送静音帧
+                    if (!isPlaying && System.currentTimeMillis() >= flushUntilMs
+                            && System.currentTimeMillis() - lastAudioTime > 1000) {
                         // 发送静音帧
                         short[] silenceFrame = new short[OPUS_FRAME_SIZE];
                         int silenceBytes = opusUtils.encode(encoderHandle, silenceFrame, 0, encodedBuffer);
@@ -654,9 +660,9 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     }
 
     /**
-     * 轮询 AudioTrack 播放头位置直到停止推进，表示缓冲区已排空。
-     * 连续500ms（5次×100ms）位置不变则视为播放完毕。
-     * 在 audioExecutor 线程中调用，不阻塞主线程。
+     * 等待 AudioTrack 缓冲区排空，然后设置 flushUntilMs。
+     * 对齐 py-xiaozhi clear_audio_queue + xiaozhi-android waitForPlaybackCompletion：
+     * 排空后额外丢弃 300ms 的录音帧，清除 AudioRecord 缓冲区里的 TTS 回声。
      */
     private void waitForAudioTrackDrain() {
         if (audioTrack == null) return;
@@ -674,6 +680,8 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                 }
             }
         } catch (InterruptedException ignored) {}
+        // AudioTrack 排空后，再丢弃 300ms 录音帧（清除 AudioRecord 里积压的回声帧）
+        flushUntilMs = System.currentTimeMillis() + 300;
     }
 
     @Override
