@@ -68,7 +68,7 @@ public class WebSocketManager {
 
         try {
             Map<String, String> headers = new HashMap<>();
-            headers.put("device-id", deviceId);
+            headers.put("Device-Id", deviceId);      // 大写格式与 ESP32 固件保持一致
             headers.put("Protocol-Version", "1");
             headers.put("Client-Id", clientId);
             if (enableToken && token != null && !token.isEmpty()) {
@@ -104,7 +104,8 @@ public class WebSocketManager {
 
                 @Override
                 public void onMessage(String message) {
-                    Log.d(TAG, "Received: " + message);
+                    // 所有服务端文本消息写入日志文件，便于远程调试
+                    LogUtils.getInstance().d(context, TAG, "收到文本消息: " + message);
                     mainHandler.post(() -> {
                         if (listener != null) listener.onMessage(message);
                     });

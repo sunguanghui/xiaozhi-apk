@@ -1,16 +1,16 @@
-2026-07-31 15:16:20.475 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/  deviceId=94:B1:C0:76:84:09  clientId=234e94d7-c523-448d-a1b5-62b2a9515ecf
-2026-07-31 15:16:20.476 D/WebSocketManager: 未携带 Authorization header（Token 未启用或为空）
-2026-07-31 15:16:20.481 D/WebSocketManager: WSS SSL 配置成功
-2026-07-31 15:16:20.481 D/WebSocketManager: connect() 已调用（非阻塞）
-2026-07-31 15:16:20.766 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
-2026-07-31 15:16:20.767 D/WebSocketManager: 已发送 hello 握手消息
-2026-07-31 15:16:20.769 D/WebSocketManager: WebSocket 关闭 - code:1000 reason:"" remote:true 连接持续:3ms
-2026-07-31 15:16:20.771 D/WebSocketManager: 判定为鉴权失败，停止重连: 服务器拒绝连接（3ms 内关闭），请检查官方平台 Token 是否正确填写。前往 https://xiaozhi.me 控制台获取设备 OTA Token。
-2026-07-31 15:16:32.545 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/  deviceId=94:B1:C0:76:84:09  clientId=234e94d7-c523-448d-a1b5-62b2a9515ecf
-2026-07-31 15:16:32.548 D/WebSocketManager: 未携带 Authorization header（Token 未启用或为空）
-2026-07-31 15:16:32.549 D/WebSocketManager: WSS SSL 配置成功
-2026-07-31 15:16:32.550 D/WebSocketManager: connect() 已调用（非阻塞）
-2026-07-31 15:16:33.111 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
-2026-07-31 15:16:33.112 D/WebSocketManager: 已发送 hello 握手消息
-2026-07-31 15:16:33.114 D/WebSocketManager: WebSocket 关闭 - code:1000 reason:"" remote:true 连接持续:3ms
-2026-07-31 15:16:33.128 D/WebSocketManager: 判定为鉴权失败，停止重连: 服务器拒绝连接（3ms 内关闭），请检查官方平台 Token 是否正确填写。前往 https://xiaozhi.me 控制台获取设备 OTA Token。
+2026-07-31 15:38:07.434 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/  deviceId=94B1C0768409  clientId=6072cd7b-3d2d-4cef-806a-bbf510e767ce
+2026-07-31 15:38:07.435 D/WebSocketManager: 未携带 Authorization header（Token 未启用或为空）
+2026-07-31 15:38:07.440 D/WebSocketManager: WSS SSL 配置成功
+2026-07-31 15:38:07.440 D/WebSocketManager: connect() 已调用（非阻塞）
+2026-07-31 15:38:07.737 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
+2026-07-31 15:38:07.738 D/WebSocketManager: 已发送 hello 握手消息
+2026-07-31 15:38:07.740 D/WebSocketManager: WebSocket 关闭 - code:1000 reason:"" remote:true 连接持续:3ms
+2026-07-31 15:38:07.746 D/WebSocketManager: 握手失败，停止重连: 服务器拒绝握手（3ms 内关闭），请检查设置是否正确，或重新安装 App 后再试。
+2026-07-31 15:38:10.986 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/  deviceId=94B1C0768409  clientId=6072cd7b-3d2d-4cef-806a-bbf510e767ce
+2026-07-31 15:38:10.987 D/WebSocketManager: 未携带 Authorization header（Token 未启用或为空）
+2026-07-31 15:38:10.992 D/WebSocketManager: WSS SSL 配置成功
+2026-07-31 15:38:10.993 D/WebSocketManager: connect() 已调用（非阻塞）
+2026-07-31 15:38:11.259 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
+2026-07-31 15:38:11.261 D/WebSocketManager: 已发送 hello 握手消息
+2026-07-31 15:38:11.261 D/WebSocketManager: WebSocket 关闭 - code:1000 reason:"" remote:true 连接持续:3ms
+2026-07-31 15:38:11.271 D/WebSocketManager: 握手失败，停止重连: 服务器拒绝握手（3ms 内关闭），请检查设置是否正确，或重新安装 App 后再试。
