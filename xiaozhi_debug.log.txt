@@ -1,16 +1,84 @@
-2026-07-31 15:38:07.434 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/  deviceId=94B1C0768409  clientId=6072cd7b-3d2d-4cef-806a-bbf510e767ce
-2026-07-31 15:38:07.435 D/WebSocketManager: 未携带 Authorization header（Token 未启用或为空）
-2026-07-31 15:38:07.440 D/WebSocketManager: WSS SSL 配置成功
-2026-07-31 15:38:07.440 D/WebSocketManager: connect() 已调用（非阻塞）
-2026-07-31 15:38:07.737 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
-2026-07-31 15:38:07.738 D/WebSocketManager: 已发送 hello 握手消息
-2026-07-31 15:38:07.740 D/WebSocketManager: WebSocket 关闭 - code:1000 reason:"" remote:true 连接持续:3ms
-2026-07-31 15:38:07.746 D/WebSocketManager: 握手失败，停止重连: 服务器拒绝握手（3ms 内关闭），请检查设置是否正确，或重新安装 App 后再试。
-2026-07-31 15:38:10.986 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/  deviceId=94B1C0768409  clientId=6072cd7b-3d2d-4cef-806a-bbf510e767ce
-2026-07-31 15:38:10.987 D/WebSocketManager: 未携带 Authorization header（Token 未启用或为空）
-2026-07-31 15:38:10.992 D/WebSocketManager: WSS SSL 配置成功
-2026-07-31 15:38:10.993 D/WebSocketManager: connect() 已调用（非阻塞）
-2026-07-31 15:38:11.259 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
-2026-07-31 15:38:11.261 D/WebSocketManager: 已发送 hello 握手消息
-2026-07-31 15:38:11.261 D/WebSocketManager: WebSocket 关闭 - code:1000 reason:"" remote:true 连接持续:3ms
-2026-07-31 15:38:11.271 D/WebSocketManager: 握手失败，停止重连: 服务器拒绝握手（3ms 内关闭），请检查设置是否正确，或重新安装 App 后再试。
+2026-07-31 16:28:28.189 D/OtaService: OTA 请求 → https://api.tenclass.net/xiaozhi/ota/
+  Device-Id=94:b1:c0:76:84:09
+  Client-Id=9352c12e-c68a-4b2a-a921-cfc8f730cb56
+  Body={"application":{"version":"1.0.0","elf_sha256":"0000000000000000000000000000000000000000000000000000000000000000"},"board":{"type":"bread-compact-wifi","name":"xiaozhi-android","ip":"100.108.41.38","mac":"94:b1:c0:76:84:09"}}
+2026-07-31 16:28:28.494 D/OtaService: OTA 响应: {"server_time":{"timestamp":1785486508020,"timezone_offset":480},"firmware":{"version":"1.0.0","url":""},"mqtt":{"endpoint":"mqtt.xiaozhi.me","client_id":"GID_test@@@94_b1_c0_76_84_09@@@9352c12e-c68a-4b2a-a921-cfc8f730cb56","username":"eyJpcCI6IjM2LjI4Ljc3LjQxIiwiYyI6MH0=","password":"1lqO1YGpv5yFDaHXG3OETpDmTox37YuX9GT25UifGdc=","publish_topic":"device-server","subscribe_topic":"null"},"websocket":{"url":"wss://api.tenclass.net/xiaozhi/v1/","token":"test-token"}}
+2026-07-31 16:28:28.494 D/OtaService: WS URL 已保存: wss://api.tenclass.net/xiaozhi/v1/
+2026-07-31 16:28:28.495 D/OtaService: WS Token 已保存
+2026-07-31 16:28:28.495 D/OtaService: 设备已激活，可直接连接
+2026-07-31 16:28:28.496 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/  deviceId=94:b1:c0:76:84:09  clientId=9352c12e-c68a-4b2a-a921-cfc8f730cb56
+2026-07-31 16:28:28.496 D/WebSocketManager: 携带用户配置 Token
+2026-07-31 16:28:28.497 D/WebSocketManager: 携带 Authorization header
+2026-07-31 16:28:28.504 D/WebSocketManager: WSS SSL 配置成功（禁用证书验证）
+2026-07-31 16:28:28.505 D/WebSocketManager: connect() 已调用（非阻塞）
+2026-07-31 16:28:28.716 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
+2026-07-31 16:28:28.718 D/WebSocketManager: 已发送 hello 握手消息
+2026-07-31 16:28:28.795 D/WebSocketManager: 收到文本消息: {"type":"hello","version":1,"transport":"websocket","audio_params":{"format":"opus","sample_rate":24000,"channels":1,"frame_duration":60},"session_id":"0d36957c"}
+2026-07-31 16:28:36.222 D/WebSocketManager: 收到文本消息: {"type":"stt","text":"你好","session_id":"0d36957c"}
+2026-07-31 16:28:36.257 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"start","sample_rate":24000,"session_id":"0d36957c"}
+2026-07-31 16:28:37.083 D/WebSocketManager: 收到文本消息: {"type":"llm","text":"😊","emotion":"happy","session_id":"0d36957c"}
+2026-07-31 16:28:37.184 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"你好呀！","session_id":"0d36957c"}
+2026-07-31 16:28:38.521 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"你好呀！","session_id":"0d36957c"}
+2026-07-31 16:28:38.523 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"今天过得怎么样啊？","session_id":"0d36957c"}
+2026-07-31 16:28:40.565 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"今天过得怎么样啊？","session_id":"0d36957c"}
+2026-07-31 16:28:40.566 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"stop","session_id":"0d36957c"}
+2026-07-31 16:28:51.546 D/WebSocketManager: 收到文本消息: {"type":"stt","text":"我感觉非常开心","session_id":"0d36957c"}
+2026-07-31 16:28:51.548 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"start","sample_rate":24000,"session_id":"0d36957c"}
+2026-07-31 16:28:52.232 D/WebSocketManager: 收到文本消息: {"type":"llm","text":"😆","emotion":"laughing","session_id":"0d36957c"}
+2026-07-31 16:28:52.433 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"哇，听到你开心我也跟着开心起来啦！","session_id":"0d36957c"}
+2026-07-31 16:28:55.648 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"哇，听到你开心我也跟着开心起来啦！","session_id":"0d36957c"}
+2026-07-31 16:28:55.650 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"是遇到什么好事了吗？","session_id":"0d36957c"}
+2026-07-31 16:28:57.747 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"是遇到什么好事了吗？","session_id":"0d36957c"}
+2026-07-31 16:28:57.753 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"stop","session_id":"0d36957c"}
+2026-07-31 16:29:22.127 D/WebSocketManager: 收到文本消息: {"type":"stt","text":"中了彩票，虽然只有5元","session_id":"0d36957c"}
+2026-07-31 16:29:22.129 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"start","sample_rate":24000,"session_id":"0d36957c"}
+2026-07-31 16:29:22.974 D/WebSocketManager: 收到文本消息: {"type":"llm","text":"😆","emotion":"laughing","session_id":"0d36957c"}
+2026-07-31 16:29:23.357 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"哈哈，5块钱也是钱嘛，白捡的快乐最香了！","session_id":"0d36957c"}
+2026-07-31 16:29:27.600 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"哈哈，5块钱也是钱嘛，白捡的快乐最香了！","session_id":"0d36957c"}
+2026-07-31 16:29:27.601 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"要不要去买杯奶茶庆祝一下？","session_id":"0d36957c"}
+2026-07-31 16:29:29.936 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"要不要去买杯奶茶庆祝一下？","session_id":"0d36957c"}
+2026-07-31 16:29:29.940 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"stop","session_id":"0d36957c"}
+2026-07-31 16:29:49.427 D/WebSocketManager: 收到文本消息: {"type":"stt","text":"不用了吧，奶茶可是要20元呢","session_id":"0d36957c"}
+2026-07-31 16:29:49.428 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"start","sample_rate":24000,"session_id":"0d36957c"}
+2026-07-31 16:29:50.327 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"哈哈也对，5块换20块，这买卖不划算啦！","session_id":"0d36957c"}
+2026-07-31 16:29:54.583 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"哈哈也对，5块换20块，这买卖不划算啦！","session_id":"0d36957c"}
+2026-07-31 16:29:54.585 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"那就把这5块钱好好存着，攒着攒着说不定就变大奖了！","session_id":"0d36957c"}
+2026-07-31 16:29:59.141 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"那就把这5块钱好好存着，攒着攒着说不定就变大奖了！","session_id":"0d36957c"}
+2026-07-31 16:29:59.144 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"stop","session_id":"0d36957c"}
+2026-07-31 16:30:06.726 D/WebSocketManager: 收到文本消息: {"type":"stt","text":"你说的对。","session_id":"0d36957c"}
+2026-07-31 16:30:06.727 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"start","sample_rate":24000,"session_id":"0d36957c"}
+2026-07-31 16:30:07.344 D/WebSocketManager: 收到文本消息: {"type":"llm","text":"😊","emotion":"happy","session_id":"0d36957c"}
+2026-07-31 16:30:07.762 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"对呀，小钱慢慢攒，快乐慢慢攒，日子就越来越甜啦！","session_id":"0d36957c"}
+2026-07-31 16:30:13.099 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"对呀，小钱慢慢攒，快乐慢慢攒，日子就越来越甜啦！","session_id":"0d36957c"}
+2026-07-31 16:30:13.100 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"对了，你今天还有别的开心事要跟我分享吗？","session_id":"0d36957c"}
+2026-07-31 16:30:16.581 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"对了，你今天还有别的开心事要跟我分享吗？","session_id":"0d36957c"}
+2026-07-31 16:30:16.582 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"stop","session_id":"0d36957c"}
+2026-07-31 16:30:28.283 D/WebSocketManager: 收到文本消息: {"type":"stt","text":"对呀，小钱慢慢存快乐慢慢攒，日子就越来越甜了。对了，你今天还有别的开心事要跟我分享吗？我学会唱一首歌，我学会唱一首歌，。","session_id":"0d36957c"}
+2026-07-31 16:30:28.291 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"start","sample_rate":24000,"session_id":"0d36957c"}
+2026-07-31 16:30:29.218 D/WebSocketManager: 收到文本消息: {"type":"llm","text":"😊","emotion":"happy","session_id":"0d36957c"}
+2026-07-31 16:30:29.366 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"哇，你学会唱歌啦！","session_id":"0d36957c"}
+2026-07-31 16:30:31.542 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"哇，你学会唱歌啦！","session_id":"0d36957c"}
+2026-07-31 16:30:31.547 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"是哪首歌呀？","session_id":"0d36957c"}
+2026-07-31 16:30:33.342 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"是哪首歌呀？","session_id":"0d36957c"}
+2026-07-31 16:30:33.343 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"要不要唱两句给我听听看？","session_id":"0d36957c"}
+2026-07-31 16:30:35.445 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"要不要唱两句给我听听看？","session_id":"0d36957c"}
+2026-07-31 16:30:35.448 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"stop","session_id":"0d36957c"}
+2026-07-31 16:30:39.946 D/WebSocketManager: 收到文本消息: {"type":"stt","text":"我学会唱一首歌啦。","session_id":"0d36957c"}
+2026-07-31 16:30:39.947 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"start","sample_rate":24000,"session_id":"0d36957c"}
+2026-07-31 16:30:41.442 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"那快唱给我听听嘛！","session_id":"0d36957c"}
+2026-07-31 16:30:43.240 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"那快唱给我听听嘛！","session_id":"0d36957c"}
+2026-07-31 16:30:43.244 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"是哪首歌呀？","session_id":"0d36957c"}
+2026-07-31 16:30:45.179 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"是哪首歌呀？","session_id":"0d36957c"}
+2026-07-31 16:30:45.182 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"stop","session_id":"0d36957c"}
+2026-07-31 16:30:58.437 D/WebSocketManager: 收到文本消息: {"type":"stt","text":"那快唱给我听听嘛，是哪首歌呀？心愿便利贴心愿便利贴。","session_id":"0d36957c"}
+2026-07-31 16:30:58.439 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"start","sample_rate":24000,"session_id":"0d36957c"}
+2026-07-31 16:30:59.336 D/WebSocketManager: 收到文本消息: {"type":"llm","text":"😊","emotion":"happy","session_id":"0d36957c"}
+2026-07-31 16:30:59.513 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"哦～心愿便利贴！","session_id":"0d36957c"}
+2026-07-31 16:31:01.522 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"哦～心愿便利贴！","session_id":"0d36957c"}
+2026-07-31 16:31:01.523 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"这首歌好甜呀，很适合你唱。","session_id":"0d36957c"}
+2026-07-31 16:31:04.635 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"这首歌好甜呀，很适合你唱。","session_id":"0d36957c"}
+2026-07-31 16:31:04.636 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_start","text":"那你唱两句给我听听好不好？","session_id":"0d36957c"}
+2026-07-31 16:31:06.854 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"sentence_end","text":"那你唱两句给我听听好不好？","session_id":"0d36957c"}
+2026-07-31 16:31:06.856 D/WebSocketManager: 收到文本消息: {"type":"tts","state":"stop","session_id":"0d36957c"}
+2026-07-31 16:31:25.264 D/WebSocketManager: WebSocket 关闭 - code:1006 reason:"" remote:true 连接持续:176545ms
+2026-07-31 16:31:25.268 D/WebSocketManager: 5秒后尝试自动重连...

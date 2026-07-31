@@ -77,7 +77,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     private WaveformView waveformView;
     private View voiceContainer;
     private View statusDot;
-    private ExecutorService audioExecutor;  // 音频处理线程池
+    private String sessionId = ""; // 服务器 hello 里返回的 session_id
     private MessageAdapter messageAdapter;  // 添加消息适配器
     private RecyclerView messagesRecyclerView;  // 添加RecyclerView引用
 
@@ -289,6 +289,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             startMessage.put("type", "listen");
             startMessage.put("state", "start");
             startMessage.put("mode", "auto");
+            if (!sessionId.isEmpty()) startMessage.put("session_id", sessionId);
             webSocketManager.sendMessage(startMessage.toString());
         } catch (JSONException e) {
             Log.e("XiaoZhi-Voice", "发送开始通话消息失败: " + e.getMessage());
@@ -335,15 +336,18 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                     // 编码为 Opus
                     int encodedBytes = opusUtils.encode(encoderHandle, buffer, 0, encodedBuffer);
                     if (encodedBytes > 0) {
-                        byte[] encodedData = new byte[encodedBytes];
-                        System.arraycopy(encodedBuffer, 0, encodedData, 0, encodedBytes);
-                        webSocketManager.sendBinaryMessage(encodedData);
+                        // isPlaying=true 时 AI 正在说话，跳过发送防止回声
+                        if (!isPlaying) {
+                            byte[] encodedData = new byte[encodedBytes];
+                            System.arraycopy(encodedBuffer, 0, encodedData, 0, encodedBytes);
+                            webSocketManager.sendBinaryMessage(encodedData);
+                        }
                     } else {
                         Log.e("XiaoZhi-Voice", "Opus编码失败: " + encodedBytes);
                     }
-                    
-                    // 检查静音超时(1秒)
-                    if (System.currentTimeMillis() - lastAudioTime > 1000) {
+
+                    // 检查静音超时(1秒)，同样只在非播放状态下发送静音帧
+                    if (!isPlaying && System.currentTimeMillis() - lastAudioTime > 1000) {
                         // 发送静音帧
                         short[] silenceFrame = new short[OPUS_FRAME_SIZE];
                         int silenceBytes = opusUtils.encode(encoderHandle, silenceFrame, 0, encodedBuffer);
@@ -361,14 +365,18 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
     private void endCall() {
         isRecording = false;
+        isPlaying = false; // 重置播放状态，防止下次通话被屏蔽
         runOnUiThread(() -> {
             voiceContainer.setVisibility(View.GONE);
             callStatusText.setVisibility(View.GONE);
             waveformView.setAmplitude(0);
         });
-        
+
+        // 释放 AudioRecord，下次通话重新创建，避免复用已停止的实例导致第二次通话失效
         if (audioRecord != null) {
             audioRecord.stop();
+            audioRecord.release();
+            audioRecord = null;
         }
 
         // 发送停止通话消息
@@ -376,7 +384,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             JSONObject stopMessage = new JSONObject();
             stopMessage.put("type", "listen");
             stopMessage.put("state", "stop");
-            stopMessage.put("mode", "auto");
+            if (!sessionId.isEmpty()) stopMessage.put("session_id", sessionId);
             webSocketManager.sendMessage(stopMessage.toString());
         } catch (JSONException e) {
             Log.e("XiaoZhi-Voice", "发送停止通话消息失败: " + e.getMessage());
@@ -392,6 +400,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                 jsonMessage.put("state", "detect");
                 jsonMessage.put("text", message);
                 jsonMessage.put("source", "text");
+                if (!sessionId.isEmpty()) jsonMessage.put("session_id", sessionId);
                 webSocketManager.sendMessage(jsonMessage.toString());
                 messageAdapter.addMessage(new Message(message, false));  // 添加用户消息
                 messageInput.setText("");
@@ -454,6 +463,16 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             String type = jsonMessage.getString("type");
             String state = jsonMessage.optString("state");
             
+            // 服务器 hello 消息：保存 session_id，后续所有消息都需要携带
+            if ("hello".equals(type)) {
+                String sid = jsonMessage.optString("session_id", "");
+                if (!sid.isEmpty()) {
+                    sessionId = sid;
+                    Log.i("XiaoZhi", "已收到 session_id: " + sessionId);
+                }
+                return;
+            }
+
             if ("bind".equals(type)) {
                 // 官方平台返回绑定验证码，弹出引导弹窗
                 String code = jsonMessage.optString("code", "");
@@ -465,7 +484,6 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                         .setCancelable(false)
                         .setPositiveButton(R.string.bind_dialog_confirm, (dialog, which) -> {
                             dialog.dismiss();
-                            // 绑定完成后重新发起握手鉴权
                             webSocketManager.reconnect();
                         })
                         .show()
