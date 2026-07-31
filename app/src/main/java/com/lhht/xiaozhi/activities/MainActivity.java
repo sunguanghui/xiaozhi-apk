@@ -22,6 +22,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.lhht.xiaozhi.utils.OtaService;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -111,10 +112,10 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
         // 初始化
         settingsManager = new SettingsManager(this);
-        // WebSocket header 用无冒号格式，日志显示用冒号格式便于阅读
-        String deviceId = settingsManager.getPlainDeviceId(this);
+        // 使用小写带冒号 MAC 格式（与 ESP32 固件及参考项目 xiaozhi-android 完全一致）
+        String deviceId = settingsManager.getFormattedDeviceId(this);
         String clientId = settingsManager.getClientId();
-        Log.i("MainActivity", "设备ID(纯hex): " + deviceId + "  ClientId: " + clientId);
+        Log.i("MainActivity", "设备ID: " + deviceId + "  ClientId: " + clientId);
         webSocketManager = new WebSocketManager(this, deviceId, clientId);
         webSocketManager.setListener(this);
         executorService = Executors.newSingleThreadExecutor();
@@ -202,20 +203,70 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
     private void toggleConnection() {
         if (!webSocketManager.isConnected()) {
-            String wsUrl = settingsManager.getEffectiveWsUrl();
-            String token = settingsManager.getToken();
-            boolean enableToken = settingsManager.isTokenEnabled();
-
-            // 官方模式下：Token 为空时不带 Authorization header，
-            // 让服务器以"未绑定设备"流程下发 bind 验证码
-            if (settingsManager.isUseOfficialServer() && (token == null || token.isEmpty())) {
-                enableToken = false;
+            if (settingsManager.isUseOfficialServer()) {
+                // 官方模式：先调 OTA API 获取激活码或确认已绑定，再连 WebSocket
+                connectOfficialServer();
+            } else {
+                // 局域网模式：直接连接
+                String wsUrl = settingsManager.getWsUrl();
+                String token = settingsManager.getToken();
+                boolean enableToken = settingsManager.isTokenEnabled();
+                webSocketManager.connect(wsUrl, token, enableToken);
             }
-
-            webSocketManager.connect(wsUrl, token, enableToken);
         } else {
             webSocketManager.disconnect();
         }
+    }
+
+    /** 官方平台连接流程：OTA → 激活码弹窗 或 直接连 WebSocket */
+    private void connectOfficialServer() {
+        String macAddress = settingsManager.getFormattedDeviceId(this);
+        String clientId   = settingsManager.getClientId();
+
+        connectionStatus.setText("正在获取激活状态…");
+
+        OtaService.checkActivation(this, macAddress, clientId, new OtaService.OtaCallback() {
+            @Override
+            public void onActivationRequired(String code, String message) {
+                // 设备未绑定 → 显示6位验证码弹窗
+                String dialogMsg = "请在浏览器打开 https://xiaozhi.me\n进入控制台添加设备，输入以下验证码：\n\n【 " + code + " 】";
+                new MaterialAlertDialogBuilder(MainActivity.this)
+                    .setTitle("设备未绑定")
+                    .setMessage(dialogMsg)
+                    .setCancelable(false)
+                    .setPositiveButton("已绑定完成，立即连接", (dialog, which) -> {
+                        dialog.dismiss();
+                        doConnectWebSocket();
+                    })
+                    .setNegativeButton("取消", (dialog, which) -> {
+                        dialog.dismiss();
+                        connectionStatus.setText(getString(R.string.status_disconnected));
+                        updateStatusDot(R.color.status_disconnected);
+                    })
+                    .show();
+            }
+
+            @Override
+            public void onAlreadyActivated() {
+                // 设备已绑定 → 直接连 WebSocket
+                doConnectWebSocket();
+            }
+
+            @Override
+            public void onError(String error) {
+                Toast.makeText(MainActivity.this, "OTA 错误: " + error, Toast.LENGTH_LONG).show();
+                connectionStatus.setText(getString(R.string.status_error));
+                updateStatusDot(R.color.status_error);
+            }
+        });
+    }
+
+    private void doConnectWebSocket() {
+        webSocketManager.connect(
+            settingsManager.getEffectiveWsUrl(),
+            settingsManager.getToken(),
+            settingsManager.isTokenEnabled()
+        );
     }
 
     private void toggleRecording() {

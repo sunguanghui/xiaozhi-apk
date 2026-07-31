@@ -68,9 +68,20 @@ public class WebSocketManager {
 
         try {
             Map<String, String> headers = new HashMap<>();
-            headers.put("Device-Id", deviceId);      // 大写格式与 ESP32 固件保持一致
+            headers.put("Device-Id", deviceId);
             headers.put("Protocol-Version", "1");
             headers.put("Client-Id", clientId);
+            // 参考项目（xiaozhi-android）的 ChatViewModel 中固定使用 "test-token"
+            // 官方服务器通过 device-id + 绑定状态（OTA 流程完成后）鉴权
+            // 局域网模式：用用户配置的 token
+            if (enableToken && token != null && !token.isEmpty()) {
+                headers.put("Authorization", "Bearer " + token);
+                LogUtils.getInstance().d(context, TAG, "携带用户配置 Token");
+            } else {
+                // 官方模式：始终发送 test-token（与参考项目一致）
+                headers.put("Authorization", "Bearer test-token");
+                LogUtils.getInstance().d(context, TAG, "携带 test-token（官方模式默认）");
+            }
             if (enableToken && token != null && !token.isEmpty()) {
                 headers.put("Authorization", "Bearer " + token);
                 LogUtils.getInstance().d(context, TAG, "携带 Authorization header");
