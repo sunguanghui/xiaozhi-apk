@@ -187,7 +187,8 @@
                 android:background="@drawable/bg_record_button"
                 android:contentDescription="@string/start_recording"
                 android:padding="8dp"
-                android:src="@drawable/ic_call" />
+                android:src="@drawable/ic_call"
+                android:tint="@android:color/white" />
 
             <ImageButton
                 android:id="@+id/sendButton"
@@ -197,7 +198,8 @@
                 android:background="@drawable/bg_send_button"
                 android:contentDescription="@string/send"
                 android:padding="10dp"
-                android:src="@drawable/ic_send" />
+                android:src="@drawable/ic_send"
+                android:tint="@android:color/white" />
 
         </LinearLayout>
 

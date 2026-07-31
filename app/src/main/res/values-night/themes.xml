@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.XiaoZhi" parent="Theme.Material3.Dark.NoActionBar">
-        <item name="colorPrimary">@color/accent</item>
-        <item name="colorOnPrimary">@color/black</item>
-        <item name="colorPrimaryContainer">@color/primary_dark</item>
-        <item name="colorOnPrimaryContainer">@color/white</item>
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorPrimaryContainer">#1A3A5C</item>
+        <item name="colorOnPrimaryContainer">@color/accent</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowBackground">@color/black</item>
+        <item name="android:windowBackground">@color/bg_page</item>
     </style>
 </resources>
