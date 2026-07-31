@@ -32,7 +32,7 @@ import com.lhht.xiaozhi.models.Message;
 import com.lhht.xiaozhi.settings.SettingsManager;
 import com.lhht.xiaozhi.views.WaveformView;
 import com.lhht.xiaozhi.websocket.WebSocketManager;
-import vip.inode.demo.opusaudiodemo.utils.OpusUtils;
+import com.lhht.xiaozhi.audio.OpusUtils;
 
 import org.json.JSONObject;
 import org.json.JSONException;

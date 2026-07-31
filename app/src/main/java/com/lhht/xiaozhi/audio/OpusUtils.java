@@ -1,7 +1,7 @@
-package vip.inode.demo.opusaudiodemo.utils;
+package com.lhht.xiaozhi.audio;
 
 public class OpusUtils {
-    private static OpusUtils opusUtils;
+    private static OpusUtils instance;
 
     static {
         System.loadLibrary("opusJni");
@@ -11,10 +11,10 @@ public class OpusUtils {
     }
 
     public static synchronized OpusUtils getInstance() {
-        if (opusUtils == null) {
-            opusUtils = new OpusUtils();
+        if (instance == null) {
+            instance = new OpusUtils();
         }
-        return opusUtils;
+        return instance;
     }
 
     public native long createEncoder(int sampleRateInHz, int channelConfig, int complexity);
@@ -23,4 +23,4 @@ public class OpusUtils {
     public native int decode(long handle, byte[] encoded, short[] lin);
     public native void destroyEncoder(long handle);
     public native void destroyDecoder(long handle);
-} 
+}

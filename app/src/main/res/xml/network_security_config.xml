@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    网络安全配置
+    - 默认禁止明文（HTTP/WS）流量
+    - 仅对本地地址（localhost / 127.0.0.1 / 192.168.x.x / 10.x.x.x）放行明文，
+      以支持连接局域网内的 IoT 设备（如小智硬件）
+    - 生产部署建议将服务端改为 WSS（TLS），届时可移除 <domain-config> 块
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+
+    <!-- 本地回环地址：开发调试用 -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+
+    <!-- 私有网络地址段：连接局域网 IoT 设备用 -->
+    <!-- Android NetworkSecurityConfig 不支持通配 IP 段，
+         请将实际设备 IP 或主机名逐条添加在此处，例如：
+         <domain-config cleartextTrafficPermitted="true">
+             <domain includeSubdomains="false">192.168.1.100</domain>
+         </domain-config>
+    -->
+</network-security-config>
