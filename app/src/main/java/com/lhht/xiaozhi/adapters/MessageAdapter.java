@@ -1,5 +1,6 @@
 package com.lhht.xiaozhi.adapters;
 
+import android.content.res.ColorStateList;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -8,6 +9,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.lhht.xiaozhi.R;
@@ -17,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.MessageViewHolder> {
-    private List<Message> messages = new ArrayList<>();
+    private final List<Message> messages = new ArrayList<>();
 
     public void addMessage(Message message) {
         messages.add(message);
@@ -36,22 +38,30 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.MessageV
     public void onBindViewHolder(@NonNull MessageViewHolder holder, int position) {
         Message message = messages.get(position);
         holder.messageText.setText(message.getText());
-        
-        // 获取LinearLayout布局参数
-        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) holder.messageText.getLayoutParams();
-        
+
+        LinearLayout.LayoutParams params =
+                (LinearLayout.LayoutParams) holder.messageText.getLayoutParams();
+
         if (message.isFromServer()) {
-            // 服务器消息靠左
-            holder.messageText.setBackgroundResource(R.drawable.bg_message);
+            // AI 消息：左对齐，浅灰气泡，深色文字
+            holder.messageText.setBackgroundResource(R.drawable.bg_ai_message);
+            holder.messageText.setTextColor(
+                    ContextCompat.getColor(holder.itemView.getContext(), R.color.bubble_ai_text));
             params.gravity = Gravity.START;
-            params.setMargins(0, 0, 100, 8);
+            params.setMarginStart(0);
+            params.setMarginEnd(
+                    (int) (holder.itemView.getContext().getResources().getDisplayMetrics().density * 72));
         } else {
-            // 用户消息靠右
-            holder.messageText.setBackgroundResource(R.drawable.bg_message);
+            // 用户消息：右对齐，主色气泡，白色文字
+            holder.messageText.setBackgroundResource(R.drawable.bg_user_message);
+            holder.messageText.setTextColor(
+                    ContextCompat.getColor(holder.itemView.getContext(), R.color.bubble_user_text));
             params.gravity = Gravity.END;
-            params.setMargins(100, 0, 0, 8);
+            params.setMarginStart(
+                    (int) (holder.itemView.getContext().getResources().getDisplayMetrics().density * 72));
+            params.setMarginEnd(0);
         }
-        
+
         holder.messageText.setLayoutParams(params);
     }
 
@@ -68,4 +78,4 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.MessageV
             messageText = itemView.findViewById(R.id.messageText);
         }
     }
-} 
+}

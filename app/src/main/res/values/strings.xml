@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">小智AI助手</string>
     <string name="settings">设置</string>
@@ -5,18 +6,22 @@
     <string name="disconnect">断开</string>
     <string name="start_recording">开始录音</string>
     <string name="stop_recording">停止录音</string>
-    <string name="websocket_url">WebSocket地址</string>
+    <string name="websocket_url">WebSocket 地址</string>
     <string name="token">Token</string>
     <string name="save">保存</string>
-    <string name="enable_token">启用Token</string>
+    <string name="enable_token">启用 Token 认证</string>
     <string name="connection_status">连接状态：%s</string>
     <string name="status_connected">已连接</string>
     <string name="status_disconnected">未连接</string>
-    <string name="status_error">错误</string>
-    <string name="message_hint">输入消息...</string>
+    <string name="status_error">连接错误</string>
+    <string name="message_hint">输入消息…</string>
     <string name="send">发送</string>
     <string name="start_call">开始通话</string>
     <string name="end_call">结束通话</string>
-    <string name="calling">通话中...</string>
-    <string name="device_id">设备ID</string>
-</resources> 
+    <string name="calling">通话中…</string>
+    <string name="device_id">设备 ID</string>
+    <string name="server_config">服务器配置</string>
+    <string name="auth_config">认证配置</string>
+    <string name="device_info">设备信息</string>
+    <string name="tap_to_connect">点击右侧按钮连接服务器</string>
+</resources>

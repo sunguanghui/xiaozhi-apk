@@ -70,6 +70,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     private TextView callStatusText;
     private WaveformView waveformView;
     private View voiceContainer;
+    private View statusDot;
     private ExecutorService audioExecutor;  // 音频处理线程池
     private MessageAdapter messageAdapter;  // 添加消息适配器
     private RecyclerView messagesRecyclerView;  // 添加RecyclerView引用
@@ -84,6 +85,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         callStatusText = findViewById(R.id.callStatusText);
         waveformView = findViewById(R.id.waveformView);
         voiceContainer = findViewById(R.id.voiceContainer);
+        statusDot = findViewById(R.id.statusDot);
         messagesRecyclerView = findViewById(R.id.messagesRecyclerView);
         
         // 设置RecyclerView
@@ -324,8 +326,9 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     public void onConnected() {
         addLog("WebSocket", "已连接");
         runOnUiThread(() -> {
-            connectionStatus.setText(getString(R.string.connection_status, getString(R.string.status_connected)));
+            connectionStatus.setText(R.string.status_connected);
             connectButton.setText(R.string.disconnect);
+            updateStatusDot(R.color.status_connected);
         });
     }
 
@@ -333,8 +336,9 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     public void onDisconnected() {
         addLog("WebSocket", "已断开");
         runOnUiThread(() -> {
-            connectionStatus.setText(getString(R.string.connection_status, getString(R.string.status_disconnected)));
+            connectionStatus.setText(R.string.status_disconnected);
             connectButton.setText(R.string.connect);
+            updateStatusDot(R.color.status_disconnected);
             endCall();
         });
     }
@@ -343,9 +347,18 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     public void onError(String error) {
         addLog("Error", error);
         runOnUiThread(() -> {
-            connectionStatus.setText(getString(R.string.connection_status, getString(R.string.status_error)));
+            connectionStatus.setText(R.string.status_error);
+            updateStatusDot(R.color.status_error);
             Toast.makeText(this, "错误: " + error, Toast.LENGTH_SHORT).show();
         });
+    }
+
+    private void updateStatusDot(int colorRes) {
+        if (statusDot != null) {
+            statusDot.setBackgroundTintList(
+                android.content.res.ColorStateList.valueOf(
+                    ContextCompat.getColor(this, colorRes)));
+        }
     }
 
     @Override

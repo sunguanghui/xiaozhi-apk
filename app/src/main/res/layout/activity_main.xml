@@ -1,43 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/bg_page">
 
-    <LinearLayout
+    <!-- 顶部 AppBar：仅标题 + 设置图标，远离系统状态栏区域 -->
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
+        android:layout_height="wrap_content"
+        android:background="@color/bg_surface"
+        app:elevation="0dp">
 
-        <androidx.appcompat.widget.Toolbar
+        <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="?android:attr/windowBackground"
-            android:elevation="4dp">
-
-            <TextView
-                android:id="@+id/connectionStatus"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:text="@string/connection_status"
-                android:textSize="16sp" />
-
-            <Button
-                android:id="@+id/connectButton"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:layout_gravity="end"
-                android:layout_marginEnd="8dp"
-                android:background="@drawable/bg_connect_button"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:textSize="14sp"
-                android:textColor="#FFFFFF"
-                android:text="@string/connect" />
+            app:title="小智AI助手"
+            app:titleTextColor="@color/text_primary">
 
             <ImageButton
                 android:id="@+id/settingsButton"
@@ -45,93 +27,160 @@
                 android:layout_height="48dp"
                 android:layout_gravity="end"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="设置"
+                android:contentDescription="@string/settings"
                 android:padding="12dp"
                 android:src="@drawable/ic_settings" />
 
-        </androidx.appcompat.widget.Toolbar>
+        </com.google.android.material.appbar.MaterialToolbar>
 
-        <!-- 消息列表容器 -->
-        <androidx.cardview.widget.CardView
+        <!-- 连接状态栏：状态点 + 状态文字 + 连接/断开按钮 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="@color/bg_status_bar"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="16dp"
+            android:paddingEnd="12dp">
+
+            <View
+                android:id="@+id/statusDot"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:background="@drawable/status_dot" />
+
+            <TextView
+                android:id="@+id/connectionStatus"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="@string/status_disconnected"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/connectButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:text="@string/connect"
+                android:textSize="13sp" />
+
+        </LinearLayout>
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <!-- 主内容区 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <!-- 消息列表 -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/messagesRecyclerView"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:layout_margin="16dp"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="0dp"
-            app:cardBackgroundColor="#1A000000">
+            android:clipToPadding="false"
+            android:paddingHorizontal="8dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="4dp" />
 
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/messagesRecyclerView"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:clipToPadding="false"
-                android:padding="8dp" />
-
-        </androidx.cardview.widget.CardView>
-
-        <FrameLayout
+        <!-- 通话中波形卡片（通话时显示） -->
+        <com.google.android.material.card.MaterialCardView
             android:id="@+id/voiceContainer"
             android:layout_width="match_parent"
-            android:layout_height="100dp"
-            android:layout_margin="16dp"
-            android:background="@drawable/bg_voice_container"
-            android:padding="16dp"
-            android:visibility="gone">
+            android:layout_height="80dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/voice_card_bg"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="4dp">
 
-            <com.lhht.xiaozhi.views.WaveformView
-                android:id="@+id/waveformView"
+            <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                android:layout_height="match_parent">
 
-            <TextView
-                android:id="@+id/callStatusText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center|top"
-                android:layout_marginTop="16dp"
-                android:text="@string/calling"
-                android:visibility="gone" />
+                <com.lhht.xiaozhi.views.WaveformView
+                    android:id="@+id/waveformView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
 
-        </FrameLayout>
+                <TextView
+                    android:id="@+id/callStatusText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="@string/calling"
+                    android:textColor="@color/white"
+                    android:textSize="14sp"
+                    android:visibility="gone" />
 
+            </FrameLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 分隔线 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/divider" />
+
+        <!-- 底部输入栏 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="?android:attr/windowBackground"
-            android:elevation="4dp"
+            android:background="@color/bg_input_bar"
+            android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:padding="8dp">
+            android:paddingStart="12dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp">
 
             <EditText
                 android:id="@+id/messageInput"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:background="@null"
+                android:background="@drawable/bg_edit_text"
                 android:hint="@string/message_hint"
-                android:padding="8dp" />
+                android:inputType="textMultiLine|textCapSentences"
+                android:maxLines="3"
+                android:padding="10dp"
+                android:textSize="15sp" />
 
             <ImageButton
                 android:id="@+id/recordButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
                 android:layout_marginStart="8dp"
-                android:layout_marginEnd="8dp"
                 android:background="@drawable/bg_record_button"
                 android:contentDescription="@string/start_recording"
                 android:padding="8dp"
                 android:src="@drawable/ic_call" />
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/sendButton"
-                style="@style/CustomButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/send" />
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="4dp"
+                android:contentDescription="@string/send"
+                app:icon="@drawable/ic_send"
+                app:iconSize="20dp" />
 
         </LinearLayout>
 
     </LinearLayout>
 
-</androidx.coordinatorlayout.widget.CoordinatorLayout> 
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
