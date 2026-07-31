@@ -89,7 +89,8 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     private View messageContentLayout;
     private ImageView messageExpandIcon;
     private boolean isMessageExpanded = false;
-    private androidx.appcompat.app.AlertDialog bindingDialog; // 绑定验证码弹窗，激活成功后自动关闭
+    private androidx.appcompat.app.AlertDialog bindingDialog;
+    private View guideCard; // 操作引导卡片
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -202,6 +203,18 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
         // 启动时静默检查版本更新
         UpdateChecker.checkOnStartup(this);
+
+        // 操作引导：未连接过时显示引导卡片
+        guideCard = findViewById(R.id.guideCard);
+        View guideDismissButton = findViewById(R.id.guideDismissButton);
+        boolean hasConnectedBefore = getSharedPreferences("guide_prefs", MODE_PRIVATE)
+                .getBoolean("has_connected", false);
+        if (!hasConnectedBefore && guideCard != null) {
+            guideCard.setVisibility(View.VISIBLE);
+        }
+        if (guideDismissButton != null) {
+            guideDismissButton.setOnClickListener(v -> hideGuide());
+        }
     }
 
     private void toggleMessageExpansion() {
@@ -460,6 +473,8 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             connectionStatus.setText(R.string.status_connected);
             connectButton.setText(R.string.disconnect);
             updateStatusDot(R.color.status_connected);
+            // 第一次连接成功时自动关闭操作引导
+            hideGuide();
         });
     }
 
@@ -692,6 +707,15 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                 e.printStackTrace();
             }
         });
+    }
+
+    /** 隐藏操作引导卡片并记录"已了解"，之后不再展示 */
+    private void hideGuide() {
+        if (guideCard != null && guideCard.getVisibility() == View.VISIBLE) {
+            guideCard.setVisibility(View.GONE);
+        }
+        getSharedPreferences("guide_prefs", MODE_PRIVATE)
+                .edit().putBoolean("has_connected", true).apply();
     }
 
     private void addLog(String tag, String message) {
