@@ -82,7 +82,12 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     // TTS 停止后清空回声帧的截止时间（对齐 py-xiaozhi clear_audio_queue）
     private volatile long flushUntilMs = 0;
     private MessageAdapter messageAdapter;  // 添加消息适配器
-    private RecyclerView messagesRecyclerView;
+    private RecyclerView messagesRecyclerView;  // 添加RecyclerView引用
+    // 消息历史折叠/展开
+    private View messageHeaderLayout;
+    private View messageContentLayout;
+    private ImageView messageExpandIcon;
+    private boolean isMessageExpanded = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -96,12 +101,18 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         voiceContainer = findViewById(R.id.voiceContainer);
         statusDot = findViewById(R.id.statusDot);
         messagesRecyclerView = findViewById(R.id.messagesRecyclerView);
+        messageHeaderLayout = findViewById(R.id.messageHeaderLayout);
+        messageContentLayout = findViewById(R.id.messageContentLayout);
+        messageExpandIcon = findViewById(R.id.messageExpandIcon);
 
         // 设置RecyclerView
         messageAdapter = new MessageAdapter();
         messagesRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         messagesRecyclerView.setAdapter(messageAdapter);
 
+        // 消息历史折叠/展开
+        messageHeaderLayout.setOnClickListener(v -> toggleMessageExpansion());
+        
         Log.i("MainActivity", "应用启动");
 
         // 初始化
@@ -163,28 +174,28 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         messageInput = findViewById(R.id.messageInput);
         sendButton = findViewById(R.id.sendButton);
 
-        // 绑定按钮
-        ImageButton recordButton = findViewById(R.id.recordButton);
+        // 绑定新布局按钮
+        ImageButton voiceButton = findViewById(R.id.voiceButton);
         ImageButton settingsButton = findViewById(R.id.settingsButton);
 
         // 设置按钮点击事件
         if (connectButton != null) connectButton.setOnClickListener(v -> toggleConnection());
-        if (recordButton != null) recordButton.setOnClickListener(v -> toggleRecording());
+        if (voiceButton != null) voiceButton.setOnClickListener(v -> toggleRecording());
         if (sendButton != null) sendButton.setOnClickListener(v -> sendMessage());
         if (settingsButton != null) settingsButton.setOnClickListener(v -> openSettings());
 
-        // 消息首条时展开消息区（自动滚到底部即可）
-        messageAdapter.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
-            @Override
-            public void onItemRangeInserted(int positionStart, int itemCount) {
-                View emptyState = findViewById(R.id.emptyStateView);
-                if (emptyState != null) emptyState.setVisibility(View.GONE);
-                messagesRecyclerView.scrollToPosition(messageAdapter.getItemCount() - 1);
-            }
-        });
-
         // 检查并请求权限
         checkPermissions();
+    }
+
+    private void toggleMessageExpansion() {
+        isMessageExpanded = !isMessageExpanded;
+        messageContentLayout.setVisibility(isMessageExpanded ? View.VISIBLE : View.GONE);
+        // 旋转展开图标
+        messageExpandIcon.animate()
+                .rotation(isMessageExpanded ? 180 : 0)
+                .setDuration(200)
+                .start();
     }
 
     private void checkPermissions() {
