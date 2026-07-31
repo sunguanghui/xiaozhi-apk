@@ -211,7 +211,7 @@ public class WebSocketManager {
         try {
             JSONObject hello = new JSONObject();
             hello.put("type", "hello");
-            hello.put("version", 3);
+            hello.put("version", 1);  // 官方协议版本号为 1，与 Protocol-Version header 保持一致
             hello.put("transport", "websocket");
             JSONObject audioParams = new JSONObject();
             audioParams.put("format", "opus");
