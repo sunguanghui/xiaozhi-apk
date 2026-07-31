@@ -25,6 +25,7 @@ public class WebSocketManager {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Context context;      // 用于 LogUtils
     private String deviceId;            // MAC 格式（AA:BB:CC:DD:EE:FF）
+    private String clientId;            // 软件唯一标识 UUID（官方协议必需）
     private WebSocketListener listener;
     private String serverUrl;
     private String token;
@@ -41,12 +42,14 @@ public class WebSocketManager {
     }
 
     /**
-     * @param context 用于 LogUtils 日志记录
+     * @param context  用于 LogUtils 日志记录
      * @param deviceId MAC 格式设备 ID（由 SettingsManager.getFormattedDeviceId() 提供）
+     * @param clientId 软件唯一 UUID（由 SettingsManager.getClientId() 提供，官方协议必需）
      */
-    public WebSocketManager(Context context, String deviceId) {
+    public WebSocketManager(Context context, String deviceId, String clientId) {
         this.context = context.getApplicationContext();
         this.deviceId = deviceId;
+        this.clientId = clientId;
     }
 
     public void setListener(WebSocketListener listener) {
@@ -63,6 +66,8 @@ public class WebSocketManager {
         try {
             Map<String, String> headers = new HashMap<>();
             headers.put("device-id", deviceId);
+            headers.put("Protocol-Version", "1");
+            headers.put("Client-Id", clientId);
             if (enableToken && token != null && !token.isEmpty()) {
                 headers.put("Authorization", "Bearer " + token);
             }

@@ -113,8 +113,9 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         settingsManager = new SettingsManager(this);
         // 使用 MAC 格式设备 ID，兼容官方小智平台校验
         String deviceId = settingsManager.getFormattedDeviceId(this);
-        Log.i("MainActivity", "设备ID(MAC格式): " + deviceId);
-        webSocketManager = new WebSocketManager(this, deviceId);
+        String clientId = settingsManager.getClientId();
+        Log.i("MainActivity", "设备ID(MAC格式): " + deviceId + "  ClientId: " + clientId);
+        webSocketManager = new WebSocketManager(this, deviceId, clientId);
         webSocketManager.setListener(this);
         executorService = Executors.newSingleThreadExecutor();
         audioExecutor = Executors.newSingleThreadExecutor();

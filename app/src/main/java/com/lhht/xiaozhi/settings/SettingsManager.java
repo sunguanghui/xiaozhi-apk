@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.provider.Settings;
 
+import java.util.UUID;
+
 public class SettingsManager {
     private static final String PREF_NAME = "xiaozhi_settings";
     private static final String KEY_WS_URL = "ws_url";
@@ -11,9 +13,13 @@ public class SettingsManager {
     private static final String KEY_ENABLE_TOKEN = "enable_token";
     private static final String KEY_DEVICE_ID = "device_id";
     private static final String KEY_USE_OFFICIAL = "use_official_server";
+    private static final String KEY_CLIENT_ID = "client_id";
 
-    /** 官方小智平台 WebSocket 地址 */
-    public static final String OFFICIAL_WS_URL = "wss://api.xiaozhi.me/v1/";
+    /**
+     * 官方小智平台 WebSocket 地址（实测正确路径）
+     * wss://api.xiaozhi.me/v1/ 返回 404；正确路径为 /xiaozhi/v1/
+     */
+    public static final String OFFICIAL_WS_URL = "wss://api.tenclass.net/xiaozhi/v1/";
 
     private final SharedPreferences preferences;
 
@@ -79,6 +85,19 @@ public class SettingsManager {
             saveDeviceId(savedDeviceId);
         }
         return savedDeviceId;
+    }
+
+    /**
+     * 返回持久化的 Client-Id（UUID 格式），首次调用时自动生成并保存。
+     * 官方协议要求每个客户端实例有唯一的软件标识符。
+     */
+    public String getClientId() {
+        String clientId = preferences.getString(KEY_CLIENT_ID, null);
+        if (clientId == null) {
+            clientId = UUID.randomUUID().toString();
+            preferences.edit().putString(KEY_CLIENT_ID, clientId).apply();
+        }
+        return clientId;
     }
 
     /**

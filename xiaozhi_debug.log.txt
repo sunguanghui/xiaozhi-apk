@@ -1,0 +1,17 @@
+2026-07-31 14:24:49.419 D/WebSocketManager: 准备连接: wss://api.xiaozhi.me/v1/
+2026-07-31 14:24:49.423 D/WebSocketManager: WSS SSL 配置成功
+2026-07-31 14:24:49.424 D/WebSocketManager: connect() 已调用（非阻塞）
+2026-07-31 14:24:49.754 D/WebSocketManager: WebSocket 关闭 - code:1002, reason:Invalid status code received: 404 Status line: HTTP/1.1 404 Not Found, remote:false
+2026-07-31 14:24:49.757 D/WebSocketManager: 3秒后尝试自动重连...
+2026-07-31 14:24:51.002 D/WebSocketManager: 准备连接: wss://api.xiaozhi.me/v1/
+2026-07-31 14:24:51.009 D/WebSocketManager: WSS SSL 配置成功
+2026-07-31 14:24:51.010 D/WebSocketManager: connect() 已调用（非阻塞）
+2026-07-31 14:24:51.281 D/WebSocketManager: WebSocket 关闭 - code:1002, reason:Invalid status code received: 404 Status line: HTTP/1.1 404 Not Found, remote:false
+2026-07-31 14:24:52.757 D/WebSocketManager: 准备连接: wss://api.xiaozhi.me/v1/
+2026-07-31 14:24:52.758 D/WebSocketManager: WSS SSL 配置成功
+2026-07-31 14:24:52.758 D/WebSocketManager: connect() 已调用（非阻塞）
+2026-07-31 14:24:53.001 D/WebSocketManager: WebSocket 关闭 - code:1002, reason:Invalid status code received: 404 Status line: HTTP/1.1 404 Not Found, remote:false
+2026-07-31 14:24:53.002 D/WebSocketManager: 3秒后尝试自动重连...
+2026-07-31 14:25:04.396 D/WebSocketManager: 准备连接: wss://api.xiaozhi.me/v1/
+2026-07-31 14:25:04.396 D/WebSocketManager: WSS SSL 配置成功
+2026-07-31 14:25:04.397 D/WebSocketManager: connect() 已调用（非阻塞）
