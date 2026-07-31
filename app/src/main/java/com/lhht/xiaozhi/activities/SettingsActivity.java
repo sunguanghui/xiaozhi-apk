@@ -15,6 +15,7 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText wsUrlInput;
     private EditText tokenInput;
     private Switch enableTokenSwitch;
+    private Switch useOfficialServerSwitch;
     private EditText deviceIdInput;
 
     @Override
@@ -23,38 +24,62 @@ public class SettingsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_settings);
 
         settingsManager = new SettingsManager(this);
-        
+
         wsUrlInput = findViewById(R.id.wsUrlInput);
         tokenInput = findViewById(R.id.tokenInput);
         enableTokenSwitch = findViewById(R.id.enableTokenSwitch);
+        useOfficialServerSwitch = findViewById(R.id.useOfficialServerSwitch);
         Button saveButton = findViewById(R.id.saveButton);
 
         // 加载当前设置
         wsUrlInput.setText(settingsManager.getWsUrl());
         tokenInput.setText(settingsManager.getToken());
         enableTokenSwitch.setChecked(settingsManager.isTokenEnabled());
+        useOfficialServerSwitch.setChecked(settingsManager.isUseOfficialServer());
 
         deviceIdInput = findViewById(R.id.deviceIdInput);
         deviceIdInput.setText(settingsManager.getDeviceId(this));
 
-        // 根据Token开关状态更新Token输入框状态
+        // 初始化禁用/启用状态
+        updateOfficialServerState(settingsManager.isUseOfficialServer());
         updateTokenInputState();
-        enableTokenSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> updateTokenInputState());
+
+        // 官方平台 Switch：开启时禁用 URL 和 Token 区域
+        useOfficialServerSwitch.setOnCheckedChangeListener((btn, isChecked) ->
+                updateOfficialServerState(isChecked));
+
+        // Token 开关仅在手动模式下有效
+        enableTokenSwitch.setOnCheckedChangeListener((btn, isChecked) ->
+                updateTokenInputState());
 
         // 保存设置
         saveButton.setOnClickListener(v -> {
             String wsUrl = wsUrlInput.getText().toString();
             String token = tokenInput.getText().toString();
             boolean enableToken = enableTokenSwitch.isChecked();
+            boolean useOfficial = useOfficialServerSwitch.isChecked();
             String deviceId = deviceIdInput.getText().toString();
 
             settingsManager.saveSettings(wsUrl, token, enableToken);
+            settingsManager.setUseOfficialServer(useOfficial);
             settingsManager.saveDeviceId(deviceId);
             finish();
         });
     }
 
-    private void updateTokenInputState() {
-        tokenInput.setEnabled(enableTokenSwitch.isChecked());
+    /** 官方模式下禁用手动 URL / Token 输入区域 */
+    private void updateOfficialServerState(boolean useOfficial) {
+        wsUrlInput.setEnabled(!useOfficial);
+        wsUrlInput.setAlpha(useOfficial ? 0.4f : 1.0f);
+        enableTokenSwitch.setEnabled(!useOfficial);
+        enableTokenSwitch.setAlpha(useOfficial ? 0.4f : 1.0f);
+        tokenInput.setEnabled(!useOfficial);
+        tokenInput.setAlpha(useOfficial ? 0.4f : 1.0f);
     }
-} 
+
+    private void updateTokenInputState() {
+        // Token 输入框跟随 Token 开关，但前提是非官方模式
+        boolean officialMode = useOfficialServerSwitch.isChecked();
+        tokenInput.setEnabled(!officialMode && enableTokenSwitch.isChecked());
+    }
+}

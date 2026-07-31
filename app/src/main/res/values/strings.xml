@@ -24,4 +24,8 @@
     <string name="auth_config">认证配置</string>
     <string name="device_info">设备信息</string>
     <string name="tap_to_connect">点击右侧按钮连接服务器</string>
+    <string name="use_official_server">接入官方小智平台 (xiaozhi.me)</string>
+    <string name="bind_dialog_title">设备未绑定</string>
+    <string name="bind_dialog_message">请在浏览器打开 https://xiaozhi.me，进入控制台添加设备并输入以下验证码：\n\n【 %s 】</string>
+    <string name="bind_dialog_confirm">已绑定完成</string>
 </resources>

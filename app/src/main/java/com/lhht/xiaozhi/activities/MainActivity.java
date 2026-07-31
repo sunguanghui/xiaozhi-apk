@@ -21,6 +21,8 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -109,8 +111,9 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
         // 初始化
         settingsManager = new SettingsManager(this);
-        String deviceId = settingsManager.getDeviceId(this);
-        Log.i("MainActivity", "设备ID: " + deviceId);
+        // 使用 MAC 格式设备 ID，兼容官方小智平台校验
+        String deviceId = settingsManager.getFormattedDeviceId(this);
+        Log.i("MainActivity", "设备ID(MAC格式): " + deviceId);
         webSocketManager = new WebSocketManager(deviceId);
         webSocketManager.setListener(this);
         executorService = Executors.newSingleThreadExecutor();
@@ -198,7 +201,8 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
     private void toggleConnection() {
         if (!webSocketManager.isConnected()) {
-            String wsUrl = settingsManager.getWsUrl();
+            // getEffectiveWsUrl() 自动选择官方或局域网地址
+            String wsUrl = settingsManager.getEffectiveWsUrl();
             String token = settingsManager.getToken();
             boolean enableToken = settingsManager.isTokenEnabled();
             webSocketManager.connect(wsUrl, token, enableToken);
@@ -392,6 +396,25 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             String type = jsonMessage.getString("type");
             String state = jsonMessage.optString("state");
             
+            if ("bind".equals(type)) {
+                // 官方平台返回绑定验证码，弹出引导弹窗
+                String code = jsonMessage.optString("code", "");
+                String msg = getString(R.string.bind_dialog_message, code);
+                runOnUiThread(() ->
+                    new MaterialAlertDialogBuilder(this)
+                        .setTitle(R.string.bind_dialog_title)
+                        .setMessage(msg)
+                        .setCancelable(false)
+                        .setPositiveButton(R.string.bind_dialog_confirm, (dialog, which) -> {
+                            dialog.dismiss();
+                            // 绑定完成后重新发起握手鉴权
+                            webSocketManager.reconnect();
+                        })
+                        .show()
+                );
+                return;
+            }
+
             if ("tts".equals(type)) {
                 if ("start".equals(state) || "sentence_start".equals(state)) {
                     addLog("Audio", "准备播放音频");
