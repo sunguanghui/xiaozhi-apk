@@ -1,145 +1,259 @@
 package com.lhht.xiaozhi.utils;
 
 import android.content.Context;
-import android.os.Build;
+import android.net.wifi.WifiManager;
 import android.os.Handler;
 import android.os.Looper;
-import android.widget.Toast;
 
-import org.json.JSONArray;
+import com.lhht.xiaozhi.settings.SettingsManager;
+
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.net.URL;
+import java.util.Collections;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
 /**
- * 调用官方小智 OTA HTTP API，获取设备激活码（6位验证码）或确认设备已绑定。
+ * 官方小智 OTA HTTP 服务。
  *
- * 接口：POST https://api.tenclass.net/xiaozhi/ota/
- * Headers：Device-Id, Client-Id, Content-Type: application/json
- * Body：仿 ESP32 的设备信息 JSON
- *
- * 响应包含 activation.code 时 → 设备未绑定，需显示验证码
- * 响应不含 activation 时 → 设备已绑定，可直接连接 WebSocket
+ * 流程（与 py-xiaozhi 完全对齐）：
+ * 1. POST https://api.tenclass.net/xiaozhi/ota/   → 获取 websocket.url / websocket.token / activation
+ * 2. 若响应含 activation → 显示6位验证码，同时每5秒轮询 /ota/activate 直到成功
+ * 3. 激活成功后保存 token / url → 建立 WebSocket
  */
 public class OtaService {
 
     public interface OtaCallback {
-        /** 设备未绑定，code = 6位验证码，message = 引导文字 */
         void onActivationRequired(String code, String message);
-        /** 设备已绑定，可直接连接 WebSocket */
         void onAlreadyActivated();
-        /** 请求失败 */
         void onError(String error);
     }
 
-    private static final String OTA_URL = "https://api.tenclass.net/xiaozhi/ota/";
+    private static final String OTA_URL      = "https://api.tenclass.net/xiaozhi/ota/";
+    private static final String ACTIVATE_URL = "https://api.tenclass.net/xiaozhi/ota/activate";
+    private static final String APP_NAME     = "xiaozhi-android";
+    private static final String APP_VERSION  = "1.0.0";
+    private static final String BOARD_TYPE   = "bread-compact-wifi"; // 与 py-xiaozhi 保持一致
+
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
     private static final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    public static void checkActivation(Context context, String macAddress, String clientId,
-                                       OtaCallback callback) {
+    public static void checkActivation(Context context, SettingsManager sm, OtaCallback callback) {
+        String macAddress = sm.getFormattedDeviceId(context);
+        String clientId   = sm.getClientId();
+        String serialNum  = sm.getSerialNumber(context);
+        String hmacKey    = sm.getHmacKey(context);
+
         executor.execute(() -> {
             try {
-                String body = buildDeviceInfoJson(macAddress, clientId);
+                String localIp = getLocalIpAddress();
+                String body = buildOtaPayload(macAddress, localIp);
+
                 LogUtils.getInstance().d(context, "OtaService",
-                        "OTA 请求 → " + OTA_URL + " Device-Id=" + macAddress);
+                        "OTA 请求 → " + OTA_URL
+                        + "\n  Device-Id=" + macAddress
+                        + "\n  Client-Id=" + clientId
+                        + "\n  Body=" + body);
 
-                URL url = new URL(OTA_URL);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setRequestProperty("Device-Id", macAddress);
-                conn.setRequestProperty("Client-Id", clientId);
-                conn.setConnectTimeout(10000);
-                conn.setReadTimeout(15000);
-                conn.setDoOutput(true);
+                String responseStr = postJson(OTA_URL, body,
+                        macAddress, clientId, null);
 
-                try (OutputStream os = conn.getOutputStream()) {
-                    os.write(body.getBytes("UTF-8"));
-                }
-
-                int code = conn.getResponseCode();
-                LogUtils.getInstance().d(context, "OtaService", "OTA 响应 HTTP " + code);
-
-                if (code != 200) {
-                    mainHandler.post(() -> callback.onError("OTA 接口返回 HTTP " + code));
-                    return;
-                }
-
-                StringBuilder sb = new StringBuilder();
-                try (BufferedReader br = new BufferedReader(
-                        new InputStreamReader(conn.getInputStream(), "UTF-8"))) {
-                    String line;
-                    while ((line = br.readLine()) != null) sb.append(line);
-                }
-
-                String responseStr = sb.toString();
-                LogUtils.getInstance().d(context, "OtaService", "OTA 响应体: " + responseStr);
+                LogUtils.getInstance().d(context, "OtaService", "OTA 响应: " + responseStr);
 
                 JSONObject json = new JSONObject(responseStr);
-                JSONObject activation = json.optJSONObject("activation");
 
+                // 解析 websocket.url 和 websocket.token，保存到 SettingsManager
+                JSONObject ws = json.optJSONObject("websocket");
+                if (ws != null) {
+                    String wsUrl = ws.optString("url", "");
+                    String wsToken = ws.optString("token", "test-token");
+                    if (wsToken.isEmpty()) wsToken = "test-token";
+                    if (!wsUrl.isEmpty()) {
+                        sm.saveOtaWsUrl(wsUrl);
+                        LogUtils.getInstance().d(context, "OtaService", "WS URL 已保存: " + wsUrl);
+                    }
+                    sm.saveOtaToken(wsToken);
+                    LogUtils.getInstance().d(context, "OtaService", "WS Token 已保存");
+                }
+
+                JSONObject activation = json.optJSONObject("activation");
                 if (activation != null) {
-                    String activationCode = activation.optString("code", "");
-                    String activationMsg  = activation.optString("message", "");
-                    mainHandler.post(() -> callback.onActivationRequired(activationCode, activationMsg));
+                    String code      = activation.optString("code", "");
+                    String message   = activation.optString("message", "");
+                    String challenge = activation.optString("challenge", "");
+
+                    LogUtils.getInstance().d(context, "OtaService",
+                            "需要激活，code=" + code + " challenge=" + challenge);
+
+                    // 主线程显示验证码弹窗，后台同时开始轮询激活接口
+                    mainHandler.post(() -> callback.onActivationRequired(code, message));
+
+                    // 后台轮询激活
+                    pollActivation(context, sm, challenge, code, serialNum, hmacKey, callback);
                 } else {
+                    LogUtils.getInstance().d(context, "OtaService", "设备已激活，可直接连接");
                     mainHandler.post(callback::onAlreadyActivated);
                 }
 
             } catch (Exception e) {
                 LogUtils.getInstance().e(context, "OtaService", "OTA 请求失败", e);
-                mainHandler.post(() -> callback.onError("网络请求失败: " + e.getMessage()));
+                mainHandler.post(() -> callback.onError("OTA 失败: " + e.getMessage()));
             }
         });
     }
 
-    /** 构造仿 ESP32 的设备信息 JSON（与参考项目 DeviceInfo.toJson() 格式一致） */
-    private static String buildDeviceInfoJson(String macAddress, String clientId) throws Exception {
-        JSONObject root = new JSONObject();
-        root.put("version", 2);
-        root.put("flash_size", 8388608);
-        root.put("psram_size", 4194304);
-        root.put("minimum_free_heap_size", 262144);
-        root.put("mac_address", macAddress);
-        root.put("uuid", clientId);
-        root.put("chip_model_name", "android");
+    /** 轮询 /ota/activate，最多60次（每次间隔5秒） */
+    private static void pollActivation(Context context, SettingsManager sm,
+                                       String challenge, String code,
+                                       String serialNum, String hmacKey,
+                                       OtaCallback callback) {
+        executor.execute(() -> {
+            try {
+                String hmacSignature = hmacSha256(hmacKey, challenge);
+                String macAddress    = sm.getFormattedDeviceId(context);
+                String clientId      = sm.getClientId();
 
-        JSONObject chipInfo = new JSONObject();
-        chipInfo.put("model", 0);
-        chipInfo.put("cores", Runtime.getRuntime().availableProcessors());
-        chipInfo.put("revision", 1);
-        chipInfo.put("features", 0);
-        root.put("chip_info", chipInfo);
+                JSONObject payload = new JSONObject();
+                JSONObject inner = new JSONObject();
+                inner.put("algorithm", "hmac-sha256");
+                inner.put("serial_number", serialNum);
+                inner.put("challenge", challenge);
+                inner.put("hmac", hmacSignature);
+                payload.put("Payload", inner);
+                String body = payload.toString();
+
+                LogUtils.getInstance().d(context, "OtaService",
+                        "开始激活轮询 serial=" + serialNum);
+
+                for (int attempt = 0; attempt < 60; attempt++) {
+                    try {
+                        String resp = postJson(ACTIVATE_URL, body,
+                                macAddress, clientId, "2");
+
+                        // HTTP 200 → 激活成功
+                        LogUtils.getInstance().d(context, "OtaService",
+                                "激活轮询 " + (attempt + 1) + "/60 成功");
+                        mainHandler.post(callback::onAlreadyActivated);
+                        return;
+
+                    } catch (ActivationPendingException e) {
+                        // HTTP 202 → 用户还未在网页上输入验证码，继续等待
+                        LogUtils.getInstance().d(context, "OtaService",
+                                "激活轮询 " + (attempt + 1) + "/60 等待中...");
+                        Thread.sleep(5000);
+                    } catch (Exception e) {
+                        LogUtils.getInstance().d(context, "OtaService",
+                                "激活轮询异常: " + e.getMessage() + "，5秒后重试");
+                        Thread.sleep(5000);
+                    }
+                }
+
+                LogUtils.getInstance().d(context, "OtaService", "激活超时（5分钟）");
+                mainHandler.post(() -> callback.onError("激活超时，请重新尝试"));
+
+            } catch (Exception e) {
+                LogUtils.getInstance().e(context, "OtaService", "激活轮询失败", e);
+                mainHandler.post(() -> callback.onError("激活失败: " + e.getMessage()));
+            }
+        });
+    }
+
+    // ── 构造 OTA 请求体（与 py-xiaozhi._build_ota_payload 格式一致）────────────
+
+    private static String buildOtaPayload(String macAddress, String localIp) throws Exception {
+        JSONObject root = new JSONObject();
 
         JSONObject app = new JSONObject();
-        app.put("name", "xiaozhi-android");
-        app.put("version", "1.0.0");
-        app.put("compile_time", "2026-07-31T00:00:00Z");
-        app.put("idf_version", "android-" + Build.VERSION.RELEASE);
+        app.put("version", APP_VERSION);
         app.put("elf_sha256", "0000000000000000000000000000000000000000000000000000000000000000");
         root.put("application", app);
 
-        root.put("partition_table", new JSONArray());
-
-        JSONObject ota = new JSONObject();
-        ota.put("label", "ota_0");
-        root.put("ota", ota);
-
         JSONObject board = new JSONObject();
-        board.put("name", Build.MODEL);
-        board.put("revision", "1.0");
-        board.put("features", new JSONArray());
-        board.put("manufacturer", Build.MANUFACTURER);
-        board.put("serial_number", macAddress.replace(":", ""));
+        board.put("type", BOARD_TYPE);
+        board.put("name", APP_NAME);
+        board.put("ip", localIp);
+        board.put("mac", macAddress);
         root.put("board", board);
 
         return root.toString();
     }
+
+    // ── HTTP POST ──────────────────────────────────────────────────────────────
+
+    /**
+     * @param activationVersion 激活接口传 "2"；OTA 接口传 null
+     * @throws ActivationPendingException 当 HTTP 202 时抛出（激活接口等待用户输入）
+     */
+    private static String postJson(String urlStr, String body,
+                                   String deviceId, String clientId,
+                                   String activationVersion) throws Exception {
+        URL url = new URL(urlStr);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setRequestProperty("Device-Id", deviceId);
+        conn.setRequestProperty("Client-Id", clientId);
+        conn.setRequestProperty("User-Agent", BOARD_TYPE + "/" + APP_NAME + "-" + APP_VERSION);
+        conn.setRequestProperty("Accept-Language", "zh-CN");
+        if (activationVersion != null) {
+            conn.setRequestProperty("Activation-Version", activationVersion);
+        }
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(15000);
+        conn.setDoOutput(true);
+
+        try (OutputStream os = conn.getOutputStream()) {
+            os.write(body.getBytes("UTF-8"));
+        }
+
+        int code = conn.getResponseCode();
+        if (code == 202) throw new ActivationPendingException();
+        if (code != 200) throw new Exception("HTTP " + code);
+
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader br = new BufferedReader(
+                new InputStreamReader(conn.getInputStream(), "UTF-8"))) {
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line);
+        }
+        return sb.toString();
+    }
+
+    // ── HMAC-SHA256 签名 ───────────────────────────────────────────────────────
+
+    private static String hmacSha256(String key, String data) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(key.getBytes("UTF-8"), "HmacSHA256"));
+        byte[] bytes = mac.doFinal(data.getBytes("UTF-8"));
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) sb.append(String.format("%02x", b));
+        return sb.toString();
+    }
+
+    // ── 获取本机 IP ──────────────────────────────────────────────────────────
+
+    private static String getLocalIpAddress() {
+        try {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                for (InetAddress addr : Collections.list(ni.getInetAddresses())) {
+                    if (!addr.isLoopbackAddress() && addr.getHostAddress().indexOf(':') < 0) {
+                        return addr.getHostAddress();
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return "127.0.0.1";
+    }
+
+    private static class ActivationPendingException extends Exception {}
 }

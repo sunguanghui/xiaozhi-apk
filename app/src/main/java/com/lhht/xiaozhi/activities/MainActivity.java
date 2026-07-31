@@ -218,26 +218,23 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         }
     }
 
-    /** 官方平台连接流程：OTA → 激活码弹窗 或 直接连 WebSocket */
+    /** 官方平台连接流程：OTA → 激活码弹窗（后台轮询）或 直接连 WebSocket */
     private void connectOfficialServer() {
-        String macAddress = settingsManager.getFormattedDeviceId(this);
-        String clientId   = settingsManager.getClientId();
-
         connectionStatus.setText("正在获取激活状态…");
 
-        OtaService.checkActivation(this, macAddress, clientId, new OtaService.OtaCallback() {
+        OtaService.checkActivation(this, settingsManager, new OtaService.OtaCallback() {
             @Override
             public void onActivationRequired(String code, String message) {
                 // 设备未绑定 → 显示6位验证码弹窗
-                String dialogMsg = "请在浏览器打开 https://xiaozhi.me\n进入控制台添加设备，输入以下验证码：\n\n【 " + code + " 】";
+                // 后台已自动开始轮询，用户绑定后会自动回调 onAlreadyActivated
+                String dialogMsg = "请在浏览器打开 https://xiaozhi.me\n"
+                        + "进入控制台添加设备，输入以下验证码：\n\n"
+                        + "【 " + code + " 】\n\n"
+                        + "绑定完成后对话框将自动关闭…";
                 new MaterialAlertDialogBuilder(MainActivity.this)
                     .setTitle("设备未绑定")
                     .setMessage(dialogMsg)
-                    .setCancelable(false)
-                    .setPositiveButton("已绑定完成，立即连接", (dialog, which) -> {
-                        dialog.dismiss();
-                        doConnectWebSocket();
-                    })
+                    .setCancelable(true)
                     .setNegativeButton("取消", (dialog, which) -> {
                         dialog.dismiss();
                         connectionStatus.setText(getString(R.string.status_disconnected));
@@ -248,7 +245,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
             @Override
             public void onAlreadyActivated() {
-                // 设备已绑定 → 直接连 WebSocket
+                // 设备已绑定（或轮询激活成功）→ 连接 WebSocket
                 doConnectWebSocket();
             }
 
@@ -262,11 +259,14 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     }
 
     private void doConnectWebSocket() {
-        webSocketManager.connect(
-            settingsManager.getEffectiveWsUrl(),
-            settingsManager.getToken(),
-            settingsManager.isTokenEnabled()
-        );
+        // 官方模式：使用 OTA 返回的 URL 和 token（默认 test-token）
+        // 局域网模式：使用用户配置的 URL 和 token
+        String wsUrl  = settingsManager.getEffectiveWsUrl();
+        String token  = settingsManager.isUseOfficialServer()
+                ? settingsManager.getOtaToken()
+                : settingsManager.getToken();
+        boolean useToken = !token.isEmpty();
+        webSocketManager.connect(wsUrl, token, useToken);
     }
 
     private void toggleRecording() {
