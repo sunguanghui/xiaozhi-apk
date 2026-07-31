@@ -81,13 +81,14 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     private String sessionId = ""; // 服务器 hello 里返回的 session_id
     // TTS 停止后清空回声帧的截止时间（对齐 py-xiaozhi clear_audio_queue）
     private volatile long flushUntilMs = 0;
-    private MessageAdapter messageAdapter;  // 添加消息适配器
-    private RecyclerView messagesRecyclerView;  // 添加RecyclerView引用
+    private MessageAdapter messageAdapter;
+    private RecyclerView messagesRecyclerView;
     // 消息历史折叠/展开
     private View messageHeaderLayout;
     private View messageContentLayout;
     private ImageView messageExpandIcon;
     private boolean isMessageExpanded = false;
+    private androidx.appcompat.app.AlertDialog bindingDialog; // 绑定验证码弹窗，激活成功后自动关闭
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -231,18 +232,18 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         OtaService.checkActivation(this, settingsManager, new OtaService.OtaCallback() {
             @Override
             public void onActivationRequired(String code, String message) {
-                // 设备未绑定 → 显示6位验证码弹窗
-                // 后台已自动开始轮询，用户绑定后会自动回调 onAlreadyActivated
                 String dialogMsg = "请在浏览器打开 https://xiaozhi.me\n"
                         + "进入控制台添加设备，输入以下验证码：\n\n"
                         + "【 " + code + " 】\n\n"
                         + "绑定完成后对话框将自动关闭…";
-                new MaterialAlertDialogBuilder(MainActivity.this)
+                // 保存引用，激活成功后可从 onAlreadyActivated 里关闭
+                bindingDialog = new MaterialAlertDialogBuilder(MainActivity.this)
                     .setTitle("设备未绑定")
                     .setMessage(dialogMsg)
                     .setCancelable(true)
                     .setNegativeButton("取消", (dialog, which) -> {
                         dialog.dismiss();
+                        bindingDialog = null;
                         connectionStatus.setText(getString(R.string.status_disconnected));
                         updateStatusDot(R.color.status_disconnected);
                     })
@@ -251,7 +252,11 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
             @Override
             public void onAlreadyActivated() {
-                // 设备已绑定（或轮询激活成功）→ 连接 WebSocket
+                // 关闭绑定弹窗（如果还在显示）
+                if (bindingDialog != null && bindingDialog.isShowing()) {
+                    bindingDialog.dismiss();
+                    bindingDialog = null;
+                }
                 doConnectWebSocket();
             }
 
