@@ -16,6 +16,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -23,6 +24,8 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -162,7 +165,17 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
         // 检查并请求权限
         checkPermissions();
-    }
+
+        // 处理底部导航栏内边距，防止输入栏被系统导航条遮挡
+        LinearLayout bottomInputBar = findViewById(R.id.bottomInputBar);
+        if (bottomInputBar != null) {
+            ViewCompat.setOnApplyWindowInsetsListener(bottomInputBar, (v, insets) -> {
+                int navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom;
+                v.setPadding(v.getPaddingLeft(), v.getPaddingTop(),
+                        v.getPaddingRight(), navBottom > 0 ? navBottom : 8);
+                return insets;
+            });
+        }
 
     private void checkPermissions() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
