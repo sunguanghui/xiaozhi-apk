@@ -3,24 +3,34 @@ package com.lhht.xiaozhi.activities;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.Switch;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.TextView;
+import android.widget.Toast;
 
-import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.FileProvider;
 
+import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.switchmaterial.SwitchMaterial;
+import com.google.android.material.textfield.TextInputEditText;
 import com.lhht.xiaozhi.R;
 import com.lhht.xiaozhi.settings.SettingsManager;
 import com.lhht.xiaozhi.utils.LogUtils;
 
+import java.io.File;
+
 public class SettingsActivity extends AppCompatActivity {
     private SettingsManager settingsManager;
-    private EditText wsUrlInput;
-    private EditText tokenInput;
-    private Switch enableTokenSwitch;
-    private Switch useOfficialServerSwitch;
-    private EditText deviceIdInput;
+    private TextInputEditText wsUrlInput;
+    private TextInputEditText tokenInput;
+    private SwitchMaterial enableTokenSwitch;
+    private SwitchMaterial useOfficialSwitch;
+    private MaterialCardView officialConfigCard;
+    private MaterialCardView selfHostConfigCard;
+    private TextView deviceIdText;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -29,84 +39,112 @@ public class SettingsActivity extends AppCompatActivity {
 
         settingsManager = new SettingsManager(this);
 
+        // Toolbar 设置
+        MaterialToolbar toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        toolbar.setNavigationOnClickListener(v -> finish());
+
+        // 初始化视图
         wsUrlInput = findViewById(R.id.wsUrlInput);
         tokenInput = findViewById(R.id.tokenInput);
         enableTokenSwitch = findViewById(R.id.enableTokenSwitch);
-        useOfficialServerSwitch = findViewById(R.id.useOfficialServerSwitch);
-        Button saveButton = findViewById(R.id.saveButton);
-        Button exportLogButton = findViewById(R.id.exportLogButton);
+        useOfficialSwitch = findViewById(R.id.useOfficialSwitch);
+        officialConfigCard = findViewById(R.id.officialConfigCard);
+        selfHostConfigCard = findViewById(R.id.selfHostConfigCard);
+        deviceIdText = findViewById(R.id.deviceIdText);
+        MaterialButton saveButton = findViewById(R.id.saveButton);
 
         // 加载当前设置
-        wsUrlInput.setText(settingsManager.getWsUrl());
-        tokenInput.setText(settingsManager.getToken());
-        enableTokenSwitch.setChecked(settingsManager.isTokenEnabled());
-        useOfficialServerSwitch.setChecked(settingsManager.isUseOfficialServer());
+        loadSettings();
 
-        deviceIdInput = findViewById(R.id.deviceIdInput);
-        deviceIdInput.setText(settingsManager.getDeviceId(this));
-
-        // 初始化禁用/启用状态
-        updateOfficialServerState(settingsManager.isUseOfficialServer());
-        updateTokenInputState();
-
-        // 官方平台 Switch：开启时禁用 URL 和 Token 区域，并自动清空旧 Token
-        useOfficialServerSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
-            updateOfficialServerState(isChecked);
-            if (isChecked) {
-                // 切到官方模式时自动清空 Token，防止 test-token 等无效值干扰绑定流程
-                tokenInput.setText("");
-                enableTokenSwitch.setChecked(false);
-            }
+        // 官方/自建开关切换
+        useOfficialSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            updateConfigVisibility(isChecked);
         });
 
-        // Token 开关仅在手动模式下有效
-        enableTokenSwitch.setOnCheckedChangeListener((btn, isChecked) ->
-                updateTokenInputState());
-
-        // 保存设置
-        saveButton.setOnClickListener(v -> {
-            String wsUrl = wsUrlInput.getText().toString();
-            String token = tokenInput.getText().toString();
-            boolean enableToken = enableTokenSwitch.isChecked();
-            boolean useOfficial = useOfficialServerSwitch.isChecked();
-            String deviceId = deviceIdInput.getText().toString();
-
-            settingsManager.saveSettings(wsUrl, token, enableToken);
-            settingsManager.setUseOfficialServer(useOfficial);
-            settingsManager.saveDeviceId(deviceId);
-            finish();
-        });
-
-        // 导出日志按钮
-        exportLogButton.setOnClickListener(v ->
-                LogUtils.getInstance().startExportLog(this));
+        // 保存按钮
+        saveButton.setOnClickListener(v -> saveSettings());
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == LogUtils.EXPORT_LOG_REQUEST_CODE
-                && resultCode == RESULT_OK && data != null) {
-            Uri uri = data.getData();
-            if (uri != null) {
-                LogUtils.getInstance().handleExportResult(this, uri);
-            }
+    public boolean onCreateOptionsMenu(android.view.Menu menu) {
+        getMenuInflater().inflate(R.menu.settings_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == R.id.action_export_log) {
+            exportLog();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    private void loadSettings() {
+        // 局域网配置
+        wsUrlInput.setText(settingsManager.getWsUrl());
+        tokenInput.setText(settingsManager.getToken());
+        enableTokenSwitch.setChecked(settingsManager.isTokenEnabled());
+
+        // 官方平台开关
+        boolean useOfficial = settingsManager.isUseOfficialServer();
+        useOfficialSwitch.setChecked(useOfficial);
+
+        // 设备ID
+        String deviceId = settingsManager.getFormattedDeviceId(this);
+        deviceIdText.setText(deviceId);
+
+        // 更新卡片可见性
+        updateConfigVisibility(useOfficial);
+    }
+
+    private void updateConfigVisibility(boolean useOfficial) {
+        if (useOfficial) {
+            officialConfigCard.setVisibility(View.VISIBLE);
+            selfHostConfigCard.setVisibility(View.GONE);
+        } else {
+            officialConfigCard.setVisibility(View.GONE);
+            selfHostConfigCard.setVisibility(View.VISIBLE);
         }
     }
 
-    /** 官方模式下禁用手动 URL / Token 输入区域 */
-    private void updateOfficialServerState(boolean useOfficial) {
-        wsUrlInput.setEnabled(!useOfficial);
-        wsUrlInput.setAlpha(useOfficial ? 0.4f : 1.0f);
-        enableTokenSwitch.setEnabled(!useOfficial);
-        enableTokenSwitch.setAlpha(useOfficial ? 0.4f : 1.0f);
-        tokenInput.setEnabled(!useOfficial);
-        tokenInput.setAlpha(useOfficial ? 0.4f : 1.0f);
+    private void saveSettings() {
+        // 保存官方/自建开关
+        settingsManager.setUseOfficialServer(useOfficialSwitch.isChecked());
+
+        // 保存局域网配置（即使是官方模式也保存，方便切换回来）
+        String wsUrl = wsUrlInput.getText().toString().trim();
+        String token = tokenInput.getText().toString().trim();
+        boolean enableToken = enableTokenSwitch.isChecked();
+        settingsManager.saveSettings(wsUrl, token, enableToken);
+
+        Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show();
+        finish();
     }
 
-    private void updateTokenInputState() {
-        // Token 输入框跟随 Token 开关，但前提是非官方模式
-        boolean officialMode = useOfficialServerSwitch.isChecked();
-        tokenInput.setEnabled(!officialMode && enableTokenSwitch.isChecked());
+    private void exportLog() {
+        try {
+            File logFile = LogUtils.getInstance().getLogFile(this);
+            if (logFile == null || !logFile.exists()) {
+                Toast.makeText(this, "日志文件不存在", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            Uri logUri = FileProvider.getUriForFile(
+                    this,
+                    getPackageName() + ".fileprovider",
+                    logFile
+            );
+
+            Intent shareIntent = new Intent(Intent.ACTION_SEND);
+            shareIntent.setType("text/plain");
+            shareIntent.putExtra(Intent.EXTRA_STREAM, logUri);
+            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            startActivity(Intent.createChooser(shareIntent, getString(R.string.export_log)));
+        } catch (Exception e) {
+            Toast.makeText(this, "导出失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 }

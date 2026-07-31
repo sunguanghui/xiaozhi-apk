@@ -59,7 +59,6 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     private SettingsManager settingsManager;
     private TextView connectionStatus;
     private Button connectButton;
-    private ImageButton recordButton;
     private ImageButton sendButton;
     private EditText messageInput;
     private AudioRecord audioRecord;
@@ -83,6 +82,11 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     private volatile long flushUntilMs = 0;
     private MessageAdapter messageAdapter;  // 添加消息适配器
     private RecyclerView messagesRecyclerView;  // 添加RecyclerView引用
+    // 消息历史折叠/展开
+    private View messageHeaderLayout;
+    private View messageContentLayout;
+    private ImageView messageExpandIcon;
+    private boolean isMessageExpanded = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -96,20 +100,17 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         voiceContainer = findViewById(R.id.voiceContainer);
         statusDot = findViewById(R.id.statusDot);
         messagesRecyclerView = findViewById(R.id.messagesRecyclerView);
-        
+        messageHeaderLayout = findViewById(R.id.messageHeaderLayout);
+        messageContentLayout = findViewById(R.id.messageContentLayout);
+        messageExpandIcon = findViewById(R.id.messageExpandIcon);
+
         // 设置RecyclerView
         messageAdapter = new MessageAdapter();
         messagesRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         messagesRecyclerView.setAdapter(messageAdapter);
 
-        // 无消息时显示空状态提示，收到第一条消息后自动隐藏
-        View emptyStateView = findViewById(R.id.emptyStateView);
-        messageAdapter.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
-            @Override
-            public void onItemRangeInserted(int positionStart, int itemCount) {
-                if (emptyStateView != null) emptyStateView.setVisibility(View.GONE);
-            }
-        });
+        // 消息历史折叠/展开
+        messageHeaderLayout.setOnClickListener(v -> toggleMessageExpansion());
         
         Log.i("MainActivity", "应用启动");
 
@@ -174,25 +175,31 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         sendButton = findViewById(R.id.sendButton);
         ImageButton settingsButton = findViewById(R.id.settingsButton);
 
+        // 绑定按钮
+        connectButton = findViewById(R.id.connectButton);
+        ImageButton voiceButton = findViewById(R.id.voiceButton);
+        sendButton = findViewById(R.id.sendButton);
+        ImageButton settingsButton = findViewById(R.id.settingsButton);
+        messageInput = findViewById(R.id.messageInput);
+
         // 设置按钮点击事件
         if (connectButton != null) connectButton.setOnClickListener(v -> toggleConnection());
-        if (recordButton != null) recordButton.setOnClickListener(v -> toggleRecording());
+        if (voiceButton != null) voiceButton.setOnClickListener(v -> toggleRecording());
         if (sendButton != null) sendButton.setOnClickListener(v -> sendMessage());
         if (settingsButton != null) settingsButton.setOnClickListener(v -> openSettings());
 
         // 检查并请求权限
         checkPermissions();
+    }
 
-        // 处理底部导航栏内边距，防止输入栏被系统导航条遮挡
-        LinearLayout bottomInputBar = findViewById(R.id.bottomInputBar);
-        if (bottomInputBar != null) {
-            ViewCompat.setOnApplyWindowInsetsListener(bottomInputBar, (v, insets) -> {
-                int navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom;
-                v.setPadding(v.getPaddingLeft(), v.getPaddingTop(),
-                        v.getPaddingRight(), navBottom > 0 ? navBottom : 8);
-                return insets;
-            });
-        }
+    private void toggleMessageExpansion() {
+        isMessageExpanded = !isMessageExpanded;
+        messageContentLayout.setVisibility(isMessageExpanded ? View.VISIBLE : View.GONE);
+        // 旋转展开图标
+        messageExpandIcon.animate()
+                .rotation(isMessageExpanded ? 180 : 0)
+                .setDuration(200)
+                .start();
     }
 
     private void checkPermissions() {

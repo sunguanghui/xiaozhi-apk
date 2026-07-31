@@ -7,7 +7,7 @@
     android:background="@color/bg_page"
     android:fitsSystemWindows="true">
 
-    <!-- 顶部 AppBar：仅标题 + 设置图标，远离系统状态栏区域 -->
+    <!-- 顶部 AppBar -->
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
@@ -20,189 +20,239 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            app:title="小智AI助手"
+            app:title="@string/app_name"
             app:titleTextColor="@color/text_primary">
 
-            <ImageButton
-                android:id="@+id/settingsButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_gravity="end"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/settings"
-                android:padding="12dp"
-                android:src="@drawable/ic_settings" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical|end"
+                android:orientation="horizontal"
+                android:paddingEnd="8dp">
 
+                <View
+                    android:id="@+id/statusDot"
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="@drawable/bg_status_dot"
+                    android:backgroundTint="@color/status_disconnected" />
+
+                <TextView
+                    android:id="@+id/connectionStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:text="@string/status_disconnected"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
+
+                <ImageButton
+                    android:id="@+id/settingsButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/settings"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_settings"
+                    android:tint="@color/text_secondary" />
+            </LinearLayout>
         </com.google.android.material.appbar.MaterialToolbar>
-
-        <!-- 连接状态栏：状态点 + 状态文字 + 连接/断开按钮 -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@color/bg_status_bar"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="16dp"
-            android:paddingEnd="12dp"
-            android:paddingTop="10dp"
-            android:paddingBottom="10dp">
-
-            <View
-                android:id="@+id/statusDot"
-                android:layout_width="8dp"
-                android:layout_height="8dp"
-                android:background="@drawable/status_dot" />
-
-            <TextView
-                android:id="@+id/connectionStatus"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_weight="1"
-                android:text="@string/status_disconnected"
-                android:textColor="@color/text_secondary"
-                android:textSize="13sp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/connectButton"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:text="@string/connect"
-                android:textSize="14sp" />
-
-        </LinearLayout>
-
     </com.google.android.material.appbar.AppBarLayout>
 
     <!-- 主内容区 -->
-    <LinearLayout
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <!-- 消息列表 + 无消息空状态 -->
-        <FrameLayout
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1">
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/messagesRecyclerView"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:clipToPadding="false"
-                android:paddingHorizontal="8dp"
-                android:paddingTop="8dp"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:id="@+id/emptyStateView"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:gravity="center"
-                android:text="连接服务器后开始对话"
-                android:textColor="@color/text_secondary"
-                android:textSize="15sp"
-                android:visibility="visible" />
-
-        </FrameLayout>
-
-        <!-- 通话中波形卡片（通话时显示） -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/voiceContainer"
-            android:layout_width="match_parent"
-            android:layout_height="80dp"
-            android:layout_marginStart="16dp"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="8dp"
-            android:visibility="gone"
-            app:cardBackgroundColor="@color/voice_card_bg"
-            app:cardCornerRadius="20dp"
-            app:cardElevation="4dp">
-
-            <FrameLayout
-                android:layout_width="match_parent"
-                android:layout_height="match_parent">
-
-                <com.lhht.xiaozhi.views.WaveformView
-                    android:id="@+id/waveformView"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent" />
-
-                <TextView
-                    android:id="@+id/callStatusText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:text="@string/calling"
-                    android:textColor="@color/white"
-                    android:textSize="14sp"
-                    android:visibility="gone" />
-
-            </FrameLayout>
-
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- 分隔线 -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="@color/divider" />
-
-        <!-- 底部输入栏 -->
         <LinearLayout
-            android:id="@+id/bottomInputBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@color/bg_input_bar"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="12dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp">
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:paddingBottom="100dp">
 
-            <EditText
-                android:id="@+id/messageInput"
-                android:layout_width="0dp"
+            <!-- 顶部连接按钮 -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/connectButton"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="24dp"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:text="@string/connect"
+                android:textSize="15sp"
+                app:cornerRadius="24dp"
+                app:icon="@drawable/ic_link"
+                app:iconGravity="start" />
+
+            <!-- 通话区域（主要功能）-->
+            <FrameLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="@drawable/bg_edit_text"
-                android:hint="@string/message_hint"
-                android:inputType="textMultiLine|textCapSentences"
-                android:maxLines="3"
-                android:padding="10dp"
-                android:textSize="15sp" />
+                android:layout_marginTop="32dp"
+                android:layout_marginBottom="32dp"
+                android:gravity="center">
 
-            <ImageButton
-                android:id="@+id/recordButton"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginStart="8dp"
-                android:background="@drawable/bg_record_button"
-                android:contentDescription="@string/start_recording"
-                android:padding="8dp"
-                android:src="@drawable/ic_call"
-                android:tint="@android:color/white" />
+                <!-- 通话中的波形显示 -->
+                <LinearLayout
+                    android:id="@+id/voiceContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:visibility="gone"
+                    android:padding="24dp">
 
-            <ImageButton
-                android:id="@+id/sendButton"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginStart="4dp"
-                android:background="@drawable/bg_send_button"
-                android:contentDescription="@string/send"
-                android:padding="10dp"
-                android:src="@drawable/ic_send"
-                android:tint="@android:color/white" />
+                    <TextView
+                        android:id="@+id/callStatusText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/calling"
+                        android:textSize="18sp"
+                        android:textColor="@color/primary"
+                        android:layout_marginBottom="24dp" />
+
+                    <com.lhht.xiaozhi.views.WaveformView
+                        android:id="@+id/waveformView"
+                        android:layout_width="280dp"
+                        android:layout_height="120dp" />
+                </LinearLayout>
+
+                <!-- 中央大按钮 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center">
+
+                    <!-- 大圆形通话按钮 -->
+                    <com.google.android.material.floatingactionbutton.FloatingActionButton
+                        android:id="@+id/voiceButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/start_recording"
+                        app:fabSize="auto"
+                        app:fabCustomSize="120dp"
+                        app:maxImageSize="56dp"
+                        app:srcCompat="@drawable/ic_call"
+                        app:tint="@android:color/white"
+                        app:elevation="6dp"
+                        app:backgroundTint="@color/primary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:text="点击开始对话"
+                        android:textSize="16sp"
+                        android:textColor="@color/text_secondary" />
+                </LinearLayout>
+            </FrameLayout>
+
+            <!-- 消息历史区域（可折叠）-->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginTop="16dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="2dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <!-- 消息历史标题栏（点击展开/折叠）-->
+                    <LinearLayout
+                        android:id="@+id/messageHeaderLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:background="?attr/selectableItemBackground">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_chat"
+                            android:tint="@color/text_secondary" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="12dp"
+                            android:text="对话记录"
+                            android:textSize="15sp"
+                            android:textColor="@color/text_primary" />
+
+                        <ImageView
+                            android:id="@+id/messageExpandIcon"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_expand_more"
+                            android:tint="@color/text_secondary" />
+                    </LinearLayout>
+
+                    <!-- 消息列表（可展开/折叠）-->
+                    <LinearLayout
+                        android:id="@+id/messageContentLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <androidx.recyclerview.widget.RecyclerView
+                            android:id="@+id/messagesRecyclerView"
+                            android:layout_width="match_parent"
+                            android:layout_height="240dp"
+                            android:padding="12dp"
+                            android:clipToPadding="false" />
+
+                        <!-- 文字输入区 -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="12dp"
+                            android:gravity="center_vertical"
+                            android:background="@color/bg_input">
+
+                            <EditText
+                                android:id="@+id/messageInput"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_input"
+                                android:hint="@string/input_hint"
+                                android:maxLines="4"
+                                android:minHeight="40dp"
+                                android:padding="10dp"
+                                android:textSize="15sp" />
+
+                            <ImageButton
+                                android:id="@+id/sendButton"
+                                android:layout_width="44dp"
+                                android:layout_height="44dp"
+                                android:layout_marginStart="8dp"
+                                android:background="@drawable/bg_send_button"
+                                android:contentDescription="@string/send"
+                                android:padding="10dp"
+                                android:src="@drawable/ic_send"
+                                android:tint="@android:color/white" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
         </LinearLayout>
-
-    </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
