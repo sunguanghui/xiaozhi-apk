@@ -77,6 +77,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     private WaveformView waveformView;
     private View voiceContainer;
     private View statusDot;
+    private ExecutorService audioExecutor;  // 音频处理线程池
     private String sessionId = ""; // 服务器 hello 里返回的 session_id
     private MessageAdapter messageAdapter;  // 添加消息适配器
     private RecyclerView messagesRecyclerView;  // 添加RecyclerView引用
