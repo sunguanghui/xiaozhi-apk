@@ -38,17 +38,21 @@ jobs:
           name: debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
 
-      # 解码 keystore 文件（仅在配置了签名 Secret 时执行）
+      # 解码 keystore（通过 env 传入 secret，避免日志泄露；未配置时跳过）
       - name: Decode keystore
-        if: ${{ secrets.KEYSTORE_BASE64 != '' && secrets.KEYSTORE_BASE64 != null }}
+        id: keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_BASE64" | base64 -d > "${{ github.workspace }}/release.keystore"
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$GITHUB_WORKSPACE/release.keystore"
+            echo "path=$GITHUB_WORKSPACE/release.keystore" >> $GITHUB_OUTPUT
+          fi
 
       # 构建Release APK
       - name: Build Release APK
         env:
-          KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
+          KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
