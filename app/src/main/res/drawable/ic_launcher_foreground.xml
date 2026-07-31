@@ -1,21 +1,92 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    小智AI助手 应用图标前景
+    设计语言：声波均衡器（5根圆角柱，中间高两侧低）+ AI光点（右上角4芒星）
+    内容位于 adaptive icon 安全区域（108×108 中央 72×72 圆形内）
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="1024"
-    android:viewportHeight="1024">
-    <group
-        android:scaleX="0.6"
-        android:scaleY="0.6"
-        android:translateX="204.8"
-        android:translateY="204.8">
-        <path android:fillColor="#CCD1D9" android:pathData="M490.656 64h42.688v255.562h-42.688z"/>
-        <path android:fillColor="#E6E9ED" android:pathData="M512 298.656c-176.718 0-320 143.282-320 320V1024h640V618.656c0-176.718-143.25-320-320-320z"/>
-        <path android:fillColor="#E6E9ED" android:pathData="M512 64m-64 0a64 64 0 1 0 128 0 64 64 0 1 0-128 0Z"/>
-        <path android:fillColor="#F5F7FA" android:pathData="M384 704c-47.062 0-85.344-38.282-85.344-85.344 0-47.032 38.282-85.344 85.344-85.344h256c47.062 0 85.344 38.312 85.344 85.344C725.344 665.718 687.062 704 640 704H384z"/>
-        <path android:fillColor="#AAB2BD" android:pathData="M640 512H384c-58.906 0-106.656 47.75-106.656 106.656s47.75 106.656 106.656 106.656h256c58.906 0 106.656-47.75 106.656-106.656S698.906 512 640 512z m0 170.656H384c-35.282 0-64-28.718-64-64s28.718-64 64-64h256c35.282 0 64 28.718 64 64s-28.718 64-64 64z"/>
-        <path android:fillColor="#48CFAD" android:pathData="M640 597.312H384c-11.782 0-21.344 9.562-21.344 21.344S372.218 640 384 640h256c11.782 0 21.344-9.562 21.344-21.344s-9.562-21.344-21.344-21.344z"/>
-        <path android:fillColor="#434A54" android:pathData="M149.344 554.656C137.562 554.656 128 564.218 128 576v64c-11.782 0-21.344 9.562-21.344 21.312 0 11.812 9.562 21.344 21.344 21.344v64C128 758.438 137.562 768 149.344 768s21.312-9.562 21.312-21.344V576c0-11.782-9.532-21.344-21.312-21.344zM896 640v-64c0-11.782-9.562-21.344-21.344-21.344s-21.312 9.562-21.312 21.344v170.656c0 11.782 9.532 21.344 21.312 21.344S896 758.438 896 746.656v-64c11.782 0 21.344-9.532 21.344-21.344 0-11.75-9.562-21.312-21.344-21.312z"/>
-        <path android:fillColor="#656D78" android:pathData="M640 832c-11.782 0-21.344 9.562-21.344 21.312H405.344c0-11.75-9.562-21.312-21.344-21.312s-21.344 9.562-21.344 21.312v21.344c0 11.782 9.562 21.344 21.344 21.344h256c11.782 0 21.344-9.562 21.344-21.344v-21.344c0-11.75-9.562-21.312-21.344-21.312z"/>
-    </group>
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- ── 声波均衡器：5根圆角矩形柱，白色 ──────────────────────────── -->
+    <!-- 整体居中：x 跨度 29~79，y 跨度 37~71，中心(54,54) -->
+
+    <!-- 柱1（最矮，左） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 32,47
+            A 3,3 0 0 1 35,50
+            L 35,58
+            A 3,3 0 0 1 32,61
+            A 3,3 0 0 1 29,58
+            L 29,50
+            A 3,3 0 0 1 32,47 Z" />
+
+    <!-- 柱2（次矮） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 43,43
+            A 3,3 0 0 1 46,46
+            L 46,62
+            A 3,3 0 0 1 43,65
+            A 3,3 0 0 1 40,62
+            L 40,46
+            A 3,3 0 0 1 43,43 Z" />
+
+    <!-- 柱3（最高，中央） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 54,37
+            A 3,3 0 0 1 57,40
+            L 57,68
+            A 3,3 0 0 1 54,71
+            A 3,3 0 0 1 51,68
+            L 51,40
+            A 3,3 0 0 1 54,37 Z" />
+
+    <!-- 柱4（次矮） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 65,43
+            A 3,3 0 0 1 68,46
+            L 68,62
+            A 3,3 0 0 1 65,65
+            A 3,3 0 0 1 62,62
+            L 62,46
+            A 3,3 0 0 1 65,43 Z" />
+
+    <!-- 柱5（最矮，右） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 76,47
+            A 3,3 0 0 1 79,50
+            L 79,58
+            A 3,3 0 0 1 76,61
+            A 3,3 0 0 1 73,58
+            L 73,50
+            A 3,3 0 0 1 76,47 Z" />
+
+    <!-- ── AI 光点：右上角 4 芒星（表示智能/AI）─────────────────────── -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.9"
+        android:pathData="M 78,24
+            L 79.2,27.2
+            L 82,28
+            L 79.2,28.8
+            L 78,32
+            L 76.8,28.8
+            L 74,28
+            L 76.8,27.2 Z" />
+
+    <!-- 小圆点（辅助光晕） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.5"
+        android:pathData="M 84,33
+            A 1.5,1.5 0 1 1 84,36
+            A 1.5,1.5 0 1 1 84,33 Z" />
+
 </vector>
