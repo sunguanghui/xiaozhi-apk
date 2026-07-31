@@ -21,8 +21,9 @@ import javax.net.ssl.SSLContext;
 
 public class WebSocketManager {
     private static final String TAG = "WebSocketManager";
-    private static final int RECONNECT_DELAY = 5000;     // 5秒后重连（官方服务器有频率限制）
-    private static final long AUTH_FAIL_THRESHOLD_MS = 800; // 800ms内关闭视为鉴权失败
+    private static final int RECONNECT_DELAY = 5000;
+    // 300ms内且无任何服务端消息，才判定为格式/鉴权错误，停止重连
+    private static final long AUTH_FAIL_THRESHOLD_MS = 300;
 
     private WebSocketClient client;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());

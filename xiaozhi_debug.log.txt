@@ -1,86 +1,16 @@
-2026-07-31 14:39:46.039 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/
-2026-07-31 14:39:46.044 D/WebSocketManager: WSS SSL 配置成功
-2026-07-31 14:39:46.044 D/WebSocketManager: connect() 已调用（非阻塞）
-2026-07-31 14:39:46.351 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
-2026-07-31 14:39:46.356 D/WebSocketManager: WebSocket 关闭 - code:1000, reason:, remote:true
-2026-07-31 14:39:46.357 D/WebSocketManager: 已发送 hello 握手消息
-2026-07-31 14:39:46.360 D/WebSocketManager: 3秒后尝试自动重连...
-2026-07-31 14:39:48.965 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/
-2026-07-31 14:39:48.966 D/WebSocketManager: WSS SSL 配置成功
-2026-07-31 14:39:48.967 D/WebSocketManager: connect() 已调用（非阻塞）
-2026-07-31 14:39:49.204 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
-2026-07-31 14:39:49.210 D/WebSocketManager: WebSocket 关闭 - code:1000, reason:, remote:true
-2026-07-31 14:39:49.211 D/WebSocketManager: 已发送 hello 握手消息
-2026-07-31 14:39:49.362 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/
-2026-07-31 14:39:49.364 D/WebSocketManager: WSS SSL 配置成功
-2026-07-31 14:39:49.366 D/WebSocketManager: connect() 已调用（非阻塞）
-2026-07-31 14:39:49.611 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
-2026-07-31 14:39:49.614 D/WebSocketManager: 已发送 hello 握手消息
-2026-07-31 14:39:49.615 D/WebSocketManager: WebSocket 关闭 - code:1000, reason:, remote:true
-2026-07-31 14:39:49.626 D/WebSocketManager: 3秒后尝试自动重连...
-2026-07-31 14:39:49.762 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/
-2026-07-31 14:39:49.763 D/WebSocketManager: WSS SSL 配置成功
-2026-07-31 14:39:49.775 D/WebSocketManager: connect() 已调用（非阻塞）
-2026-07-31 14:39:49.999 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
-2026-07-31 14:39:50.005 D/WebSocketManager: WebSocket 关闭 - code:1000, reason:, remote:true
-2026-07-31 14:39:50.007 D/WebSocketManager: 已发送 hello 握手消息
-2026-07-31 14:39:50.409 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/
-2026-07-31 14:39:50.411 D/WebSocketManager: WSS SSL 配置成功
-2026-07-31 14:39:50.411 D/WebSocketManager: connect() 已调用（非阻塞）
-2026-07-31 14:39:50.632 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
-2026-07-31 14:39:50.636 D/WebSocketManager: WebSocket 关闭 - code:1000, reason:, remote:true
-2026-07-31 14:39:50.638 D/WebSocketManager: 已发送 hello 握手消息
-2026-07-31 14:39:52.631 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/
-2026-07-31 14:39:52.632 D/WebSocketManager: WSS SSL 配置成功
-2026-07-31 14:39:52.634 D/WebSocketManager: connect() 已调用（非阻塞）
-2026-07-31 14:39:52.894 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
-2026-07-31 14:39:52.896 D/WebSocketManager: WebSocket 关闭 - code:1000, reason:, remote:true
-2026-07-31 14:40:00.337 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/
-2026-07-31 14:40:00.342 D/WebSocketManager: WSS SSL 配置成功
-2026-07-31 14:40:00.342 D/WebSocketManager: connect() 已调用（非阻塞）
-2026-07-31 14:40:00.632 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
-2026-07-31 14:40:00.637 D/WebSocketManager: 已发送 hello 握手消息
-2026-07-31 14:40:00.638 D/WebSocketManager: WebSocket 关闭 - code:1000, reason:, remote:true
-2026-07-31 14:40:00.647 D/WebSocketManager: 3秒后尝试自动重连...
-2026-07-31 14:40:03.652 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/
-2026-07-31 14:40:03.654 D/WebSocketManager: WSS SSL 配置成功
-2026-07-31 14:40:03.655 D/WebSocketManager: connect() 已调用（非阻塞）
-2026-07-31 14:40:04.027 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
-2026-07-31 14:40:04.029 D/WebSocketManager: 已发送 hello 握手消息
-2026-07-31 14:40:04.029 D/WebSocketManager: WebSocket 关闭 - code:1000, reason:, remote:true
-2026-07-31 14:40:04.048 D/WebSocketManager: 3秒后尝试自动重连...
-2026-07-31 14:40:07.048 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/
-2026-07-31 14:40:07.049 D/WebSocketManager: WSS SSL 配置成功
-2026-07-31 14:40:07.050 D/WebSocketManager: connect() 已调用（非阻塞）
-2026-07-31 14:40:07.315 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
-2026-07-31 14:40:07.316 D/WebSocketManager: WebSocket 关闭 - code:1000, reason:, remote:true
-2026-07-31 14:40:07.317 D/WebSocketManager: 已发送 hello 握手消息
-2026-07-31 14:40:07.318 D/WebSocketManager: 3秒后尝试自动重连...
-2026-07-31 14:40:10.323 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/
-2026-07-31 14:40:10.325 D/WebSocketManager: WSS SSL 配置成功
-2026-07-31 14:40:10.326 D/WebSocketManager: connect() 已调用（非阻塞）
-2026-07-31 14:40:10.591 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
-2026-07-31 14:40:10.595 D/WebSocketManager: 已发送 hello 握手消息
-2026-07-31 14:40:10.595 D/WebSocketManager: WebSocket 关闭 - code:1000, reason:, remote:true
-2026-07-31 14:40:10.612 D/WebSocketManager: 3秒后尝试自动重连...
-2026-07-31 14:40:13.618 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/
-2026-07-31 14:40:13.619 D/WebSocketManager: WSS SSL 配置成功
-2026-07-31 14:40:13.619 D/WebSocketManager: connect() 已调用（非阻塞）
-2026-07-31 14:40:13.624 E/WebSocketManager: WebSocket 错误: Unable to resolve host "api.tenclass.net": No address associated with hostname
-java.net.UnknownHostException: Unable to resolve host "api.tenclass.net": No address associated with hostname
-	at java.net.Inet6AddressImpl.lookupHostByName(Inet6AddressImpl.java:156)
-	at java.net.Inet6AddressImpl.lookupAllHostAddr(Inet6AddressImpl.java:103)
-	at java.net.InetAddress.getByName(InetAddress.java:1106)
-	at org.java_websocket.client.WebSocketClient$1.resolve(Unknown Source:4)
-	at org.java_websocket.client.WebSocketClient.run(Unknown Source:62)
-	at java.lang.Thread.run(Thread.java:1012)
-Caused by: android.system.GaiException: android_getaddrinfo failed: EAI_NODATA (No address associated with hostname)
-	at libcore.io.Linux.android_getaddrinfo(Native Method)
-	at libcore.io.ForwardingOs.android_getaddrinfo(ForwardingOs.java:133)
-	at libcore.io.BlockGuardOs.android_getaddrinfo(BlockGuardOs.java:222)
-	at libcore.io.ForwardingOs.android_getaddrinfo(ForwardingOs.java:133)
-	at java.net.Inet6AddressImpl.lookupHostByName(Inet6AddressImpl.java:135)
-	... 5 more
-
-2026-07-31 14:40:13.627 D/WebSocketManager: WebSocket 关闭 - code:-1, reason:Unable to resolve host "api.tenclass.net": No address associated with hostname, remote:false
-2026-07-31 14:40:13.628 D/WebSocketManager: 3秒后尝试自动重连...
+2026-07-31 15:16:20.475 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/  deviceId=94:B1:C0:76:84:09  clientId=234e94d7-c523-448d-a1b5-62b2a9515ecf
+2026-07-31 15:16:20.476 D/WebSocketManager: 未携带 Authorization header（Token 未启用或为空）
+2026-07-31 15:16:20.481 D/WebSocketManager: WSS SSL 配置成功
+2026-07-31 15:16:20.481 D/WebSocketManager: connect() 已调用（非阻塞）
+2026-07-31 15:16:20.766 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
+2026-07-31 15:16:20.767 D/WebSocketManager: 已发送 hello 握手消息
+2026-07-31 15:16:20.769 D/WebSocketManager: WebSocket 关闭 - code:1000 reason:"" remote:true 连接持续:3ms
+2026-07-31 15:16:20.771 D/WebSocketManager: 判定为鉴权失败，停止重连: 服务器拒绝连接（3ms 内关闭），请检查官方平台 Token 是否正确填写。前往 https://xiaozhi.me 控制台获取设备 OTA Token。
+2026-07-31 15:16:32.545 D/WebSocketManager: 准备连接: wss://api.tenclass.net/xiaozhi/v1/  deviceId=94:B1:C0:76:84:09  clientId=234e94d7-c523-448d-a1b5-62b2a9515ecf
+2026-07-31 15:16:32.548 D/WebSocketManager: 未携带 Authorization header（Token 未启用或为空）
+2026-07-31 15:16:32.549 D/WebSocketManager: WSS SSL 配置成功
+2026-07-31 15:16:32.550 D/WebSocketManager: connect() 已调用（非阻塞）
+2026-07-31 15:16:33.111 D/WebSocketManager: WebSocket 已连接，HTTP状态: 101
+2026-07-31 15:16:33.112 D/WebSocketManager: 已发送 hello 握手消息
+2026-07-31 15:16:33.114 D/WebSocketManager: WebSocket 关闭 - code:1000 reason:"" remote:true 连接持续:3ms
+2026-07-31 15:16:33.128 D/WebSocketManager: 判定为鉴权失败，停止重连: 服务器拒绝连接（3ms 内关闭），请检查官方平台 Token 是否正确填写。前往 https://xiaozhi.me 控制台获取设备 OTA Token。

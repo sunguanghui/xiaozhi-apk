@@ -101,11 +101,26 @@ public class SettingsManager {
     }
 
     /**
-     * 返回官方服务器所需的 MAC 地址格式设备 ID。
+     * 返回官方服务器所需的 MAC 地址格式设备 ID（带冒号，用于显示）。
      * 取 Android ID 的前 12 位十六进制字符（不足则补 '0'），
      * 每两位用冒号分隔，转为大写，格式如：AA:BB:CC:DD:EE:FF。
      */
     public String getFormattedDeviceId(Context context) {
+        String hex = getPlainDeviceId(context);
+        // 格式化为 AA:BB:CC:DD:EE:FF
+        StringBuilder mac = new StringBuilder();
+        for (int i = 0; i < 12; i += 2) {
+            if (mac.length() > 0) mac.append(":");
+            mac.append(hex, i, i + 2);
+        }
+        return mac.toString();
+    }
+
+    /**
+     * 返回官方服务器 device-id header 所需的纯大写12位十六进制格式（无冒号）。
+     * 格式如：94B1C076840A
+     */
+    public String getPlainDeviceId(Context context) {
         String rawId = Settings.Secure.getString(
                 context.getContentResolver(),
                 Settings.Secure.ANDROID_ID);
@@ -114,14 +129,6 @@ public class SettingsManager {
         // 取纯十六进制字符，截取或补齐至 12 位
         String hex = rawId.replaceAll("[^0-9a-fA-F]", "");
         while (hex.length() < 12) hex = hex + "0";
-        hex = hex.substring(0, 12).toUpperCase();
-
-        // 格式化为 AA:BB:CC:DD:EE:FF
-        StringBuilder mac = new StringBuilder();
-        for (int i = 0; i < 12; i += 2) {
-            if (mac.length() > 0) mac.append(":");
-            mac.append(hex, i, i + 2);
-        }
-        return mac.toString();
+        return hex.substring(0, 12).toUpperCase();
     }
 }
