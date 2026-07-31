@@ -121,15 +121,15 @@ public class WebSocketManager {
                     mainHandler.post(() -> {
                         if (listener != null) listener.onDisconnected();
 
-                        // ★ 检测鉴权失败：连接建立后不到 800ms 就被服务端关闭（code:1000）
-                        // 此时无限重连无意义，应停止并提示用户检查 Token
+                        // 检测连接建立后极短时间（<300ms）被服务端关闭：协议握手失败
+                        // 常见原因：hello version 不匹配、device-id 格式错误等
+                        // 此时无限重连无意义，停止并提示用户
                         if (remote && code == 1000 && duration < AUTH_FAIL_THRESHOLD_MS) {
-                            String authErr = "服务器拒绝连接（" + duration + "ms 内关闭），"
-                                    + "请检查官方平台 Token 是否正确填写。"
-                                    + "前往 https://xiaozhi.me 控制台获取设备 OTA Token。";
-                            LogUtils.getInstance().d(context, TAG, "判定为鉴权失败，停止重连: " + authErr);
+                            String authErr = "服务器拒绝握手（" + duration + "ms 内关闭），"
+                                    + "请检查设置是否正确，或重新安装 App 后再试。";
+                            LogUtils.getInstance().d(context, TAG, "握手失败，停止重连: " + authErr);
                             if (listener != null) listener.onError(authErr);
-                            return; // 不再自动重连
+                            return;
                         }
 
                         scheduleReconnect();
