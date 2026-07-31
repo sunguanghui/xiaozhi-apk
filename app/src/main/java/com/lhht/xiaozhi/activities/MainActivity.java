@@ -16,6 +16,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -170,17 +171,12 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         // 初始化视图
         connectionStatus = findViewById(R.id.connectionStatus);
         connectButton = findViewById(R.id.connectButton);
-        recordButton = findViewById(R.id.recordButton);
         messageInput = findViewById(R.id.messageInput);
         sendButton = findViewById(R.id.sendButton);
-        ImageButton settingsButton = findViewById(R.id.settingsButton);
 
-        // 绑定按钮
-        connectButton = findViewById(R.id.connectButton);
+        // 绑定新布局按钮
         ImageButton voiceButton = findViewById(R.id.voiceButton);
-        sendButton = findViewById(R.id.sendButton);
         ImageButton settingsButton = findViewById(R.id.settingsButton);
-        messageInput = findViewById(R.id.messageInput);
 
         // 设置按钮点击事件
         if (connectButton != null) connectButton.setOnClickListener(v -> toggleConnection());

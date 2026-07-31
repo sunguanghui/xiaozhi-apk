@@ -52,6 +52,12 @@ public class LogUtils {
 
     // ── 写日志 ────────────────────────────────────────────────────────────────
 
+    /** 返回日志文件对象，供外部分享使用 */
+    public File getLogFile(Context context) {
+        if (context == null) return null;
+        return new File(context.getApplicationContext().getFilesDir() + "/logs", LOG_FILE_NAME);
+    }
+
     public void d(Context context, String tag, String msg) {
         Log.d(tag, msg);
         writeToFile(context, "D", tag, msg, null);
