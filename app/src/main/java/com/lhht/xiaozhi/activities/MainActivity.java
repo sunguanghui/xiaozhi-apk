@@ -349,6 +349,13 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                     }
                     
                     // 编码为 Opus
+                    // 参考 xiaozhi-android-client audio_util.dart：
+                    // 当 samplesRead < 960 时补零，避免 Opus 编码器因帧不足而失败
+                    if (samplesRead < OPUS_FRAME_SIZE) {
+                        for (int i = samplesRead; i < OPUS_FRAME_SIZE; i++) {
+                            buffer[i] = 0;
+                        }
+                    }
                     int encodedBytes = opusUtils.encode(encoderHandle, buffer, 0, encodedBuffer);
                     if (encodedBytes > 0) {
                         long now = System.currentTimeMillis();

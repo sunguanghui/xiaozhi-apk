@@ -88,10 +88,26 @@ public class SettingsActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
+    private String actualToken = ""; // 存储真实 token，脱敏显示时备用
+
     private void loadSettings() {
         // 局域网配置
         wsUrlInput.setText(settingsManager.getWsUrl());
-        tokenInput.setText(settingsManager.getToken());
+
+        // Token 脱敏显示：参考 xiaozhi-android-client，前8位 + ****
+        actualToken = settingsManager.getToken();
+        tokenInput.setText(maskToken(actualToken));
+        // 获焦时清空以便重新输入新 Token
+        tokenInput.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus) {
+                String current = tokenInput.getText().toString();
+                if (isMasked(current)) {
+                    tokenInput.setText("");
+                    tokenInput.setHint("输入新 Token（留空则保持原值不变）");
+                }
+            }
+        });
+
         enableTokenSwitch.setChecked(settingsManager.isTokenEnabled());
 
         // 官方平台开关
@@ -106,6 +122,18 @@ public class SettingsActivity extends AppCompatActivity {
         updateConfigVisibility(useOfficial);
     }
 
+    /** 将 token 脱敏：前8位明文 + **** */
+    private static String maskToken(String token) {
+        if (token == null || token.isEmpty()) return "";
+        int visible = Math.min(8, token.length());
+        return token.substring(0, visible) + "****";
+    }
+
+    /** 判断当前字段内容是否为脱敏格式（以 **** 结尾） */
+    private static boolean isMasked(String s) {
+        return s != null && s.endsWith("****");
+    }
+
     private void updateConfigVisibility(boolean useOfficial) {
         if (useOfficial) {
             officialConfigCard.setVisibility(View.VISIBLE);
@@ -117,12 +145,12 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void saveSettings() {
-        // 保存官方/自建开关
         settingsManager.setUseOfficialServer(useOfficialSwitch.isChecked());
 
-        // 保存局域网配置（即使是官方模式也保存，方便切换回来）
         String wsUrl = wsUrlInput.getText().toString().trim();
-        String token = tokenInput.getText().toString().trim();
+        String inputToken = tokenInput.getText().toString().trim();
+        // 如果用户没有修改 token（字段仍是脱敏格式或为空），保留原始 token
+        String token = (inputToken.isEmpty() || isMasked(inputToken)) ? actualToken : inputToken;
         boolean enableToken = enableTokenSwitch.isChecked();
         settingsManager.saveSettings(wsUrl, token, enableToken);
 
