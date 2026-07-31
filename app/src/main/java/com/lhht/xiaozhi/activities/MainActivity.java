@@ -202,10 +202,16 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
     private void toggleConnection() {
         if (!webSocketManager.isConnected()) {
-            // getEffectiveWsUrl() 自动选择官方或局域网地址
             String wsUrl = settingsManager.getEffectiveWsUrl();
             String token = settingsManager.getToken();
             boolean enableToken = settingsManager.isTokenEnabled();
+
+            // 官方模式下：Token 为空时不带 Authorization header，
+            // 让服务器以"未绑定设备"流程下发 bind 验证码
+            if (settingsManager.isUseOfficialServer() && (token == null || token.isEmpty())) {
+                enableToken = false;
+            }
+
             webSocketManager.connect(wsUrl, token, enableToken);
         } else {
             webSocketManager.disconnect();

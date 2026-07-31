@@ -49,9 +49,15 @@ public class SettingsActivity extends AppCompatActivity {
         updateOfficialServerState(settingsManager.isUseOfficialServer());
         updateTokenInputState();
 
-        // 官方平台 Switch：开启时禁用 URL 和 Token 区域
-        useOfficialServerSwitch.setOnCheckedChangeListener((btn, isChecked) ->
-                updateOfficialServerState(isChecked));
+        // 官方平台 Switch：开启时禁用 URL 和 Token 区域，并自动清空旧 Token
+        useOfficialServerSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
+            updateOfficialServerState(isChecked);
+            if (isChecked) {
+                // 切到官方模式时自动清空 Token，防止 test-token 等无效值干扰绑定流程
+                tokenInput.setText("");
+                enableTokenSwitch.setChecked(false);
+            }
+        });
 
         // Token 开关仅在手动模式下有效
         enableTokenSwitch.setOnCheckedChangeListener((btn, isChecked) ->
