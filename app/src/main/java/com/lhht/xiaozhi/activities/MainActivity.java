@@ -57,8 +57,8 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     private TextView connectionStatus;
     private Button connectButton;
     private ImageButton recordButton;
+    private ImageButton sendButton;
     private EditText messageInput;
-    private Button sendButton;
     private AudioRecord audioRecord;
     private AudioTrack audioTrack;
     private boolean isRecording = false;
@@ -95,6 +95,15 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         messageAdapter = new MessageAdapter();
         messagesRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         messagesRecyclerView.setAdapter(messageAdapter);
+
+        // 无消息时显示空状态提示，收到第一条消息后自动隐藏
+        View emptyStateView = findViewById(R.id.emptyStateView);
+        messageAdapter.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
+            @Override
+            public void onItemRangeInserted(int positionStart, int itemCount) {
+                if (emptyStateView != null) emptyStateView.setVisibility(View.GONE);
+            }
+        });
         
         Log.i("MainActivity", "应用启动");
 

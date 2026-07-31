@@ -38,12 +38,14 @@
         <!-- 连接状态栏：状态点 + 状态文字 + 连接/断开按钮 -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="wrap_content"
             android:background="@color/bg_status_bar"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="16dp"
-            android:paddingEnd="12dp">
+            android:paddingEnd="12dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp">
 
             <View
                 android:id="@+id/statusDot"
@@ -65,13 +67,11 @@
                 android:id="@+id/connectButton"
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="wrap_content"
-                android:layout_height="32dp"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:paddingStart="14dp"
-                android:paddingEnd="14dp"
+                android:layout_height="wrap_content"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
                 android:text="@string/connect"
-                android:textSize="13sp" />
+                android:textSize="14sp" />
 
         </LinearLayout>
 
@@ -84,16 +84,33 @@
         android:orientation="vertical"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <!-- 消息列表 -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/messagesRecyclerView"
+        <!-- 消息列表 + 无消息空状态 -->
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
-            android:clipToPadding="false"
-            android:paddingHorizontal="8dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="4dp" />
+            android:layout_weight="1">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/messagesRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:paddingHorizontal="8dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="4dp" />
+
+            <TextView
+                android:id="@+id/emptyStateView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:text="连接服务器后开始对话"
+                android:textColor="@color/text_secondary"
+                android:textSize="15sp"
+                android:visibility="visible" />
+
+        </FrameLayout>
 
         <!-- 通话中波形卡片（通话时显示） -->
         <com.google.android.material.card.MaterialCardView
@@ -172,15 +189,15 @@
                 android:padding="8dp"
                 android:src="@drawable/ic_call" />
 
-            <com.google.android.material.button.MaterialButton
+            <ImageButton
                 android:id="@+id/sendButton"
-                style="@style/Widget.Material3.Button.IconButton"
                 android:layout_width="44dp"
                 android:layout_height="44dp"
                 android:layout_marginStart="4dp"
+                android:background="@drawable/bg_send_button"
                 android:contentDescription="@string/send"
-                app:icon="@drawable/ic_send"
-                app:iconSize="20dp" />
+                android:padding="10dp"
+                android:src="@drawable/ic_send" />
 
         </LinearLayout>
 
