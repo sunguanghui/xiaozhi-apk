@@ -176,6 +176,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                 return insets;
             });
         }
+    }
 
     private void checkPermissions() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
