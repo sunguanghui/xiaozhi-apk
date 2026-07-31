@@ -1,4 +1,4 @@
-# 小智AI助手 Android 客户端 · 技术评审文档
+# 灵犀 Android 客户端 · 技术评审文档
 
 > 文档版本：2026-07-31　　仓库：https://github.com/sunguanghui/xiaozhi-apk
 
@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 项目名称 | 小智AI助手 Android 客户端 |
+| 项目名称 | 灵犀 Android 客户端 |
 | 包名 | `com.lhht.xiaozhi.ai` |
 | 代码命名空间 | `com.lhht.xiaozhi` |
 | 仓库地址 | https://github.com/sunguanghui/xiaozhi-apk |
