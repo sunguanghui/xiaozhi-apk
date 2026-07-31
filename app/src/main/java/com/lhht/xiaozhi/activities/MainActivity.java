@@ -566,12 +566,21 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                 }
             }
             
-            // 显示服务器的文本回复
-            if (jsonMessage.has("text")) {
+            // 文字显示规则（参考 py-xiaozhi / xiaozhi-android）：
+            // - tts.sentence_start → 显示 AI 回复（只显示一次，sentence_end 同文字不再重复）
+            // - stt              → 显示用户说的话（isFromServer=false）
+            // - llm / 其他       → 只含 emotion/emoji，不加入聊天气泡
+            if ("tts".equals(type) && "sentence_start".equals(state) && jsonMessage.has("text")) {
                 String text = jsonMessage.getString("text");
                 runOnUiThread(() -> {
-                    messageAdapter.addMessage(new Message(text, true));  // 添加服务器消息
-                    messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);  // 滚动到底部
+                    messageAdapter.addMessage(new Message(text, true));
+                    messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);
+                });
+            } else if ("stt".equals(type) && jsonMessage.has("text")) {
+                String text = jsonMessage.getString("text");
+                runOnUiThread(() -> {
+                    messageAdapter.addMessage(new Message(text, false)); // 用户的话
+                    messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);
                 });
             }
         } catch (JSONException e) {
