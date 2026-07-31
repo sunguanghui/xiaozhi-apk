@@ -534,8 +534,29 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                         }
                     });
                 } else if ("stop".equals(state)) {
-                    addLog("Audio", "停止接收新的音频数据");
-                    isPlaying = false;  // 只停止接收新数据，不停止播放
+                    addLog("Audio", "停止接收新的音频数据，等待播放缓冲区排空");
+                    // 不立即设 isPlaying=false：AudioTrack 缓冲区里还有音频待播
+                    // 提交到 audioExecutor 队列末尾，等所有写入任务完成后再轮询排空
+                    audioExecutor.execute(() -> {
+                        waitForAudioTrackDrain();
+                        isPlaying = false;
+                        addLog("Audio", "AudioTrack 缓冲排空，麦克风已重新开启");
+                        // 自动重发 listen.start（与 py-xiaozhi 一致）
+                        // 告知服务端客户端已准备好接收下一轮语音
+                        if (isRecording) {
+                            try {
+                                JSONObject listenMsg = new JSONObject();
+                                listenMsg.put("type", "listen");
+                                listenMsg.put("state", "start");
+                                listenMsg.put("mode", "auto");
+                                if (!sessionId.isEmpty()) listenMsg.put("session_id", sessionId);
+                                webSocketManager.sendMessage(listenMsg.toString());
+                                addLog("Audio", "已自动重发 listen.start");
+                            } catch (JSONException e) {
+                                Log.e("XiaoZhi-Voice", "重发 listen.start 失败: " + e.getMessage());
+                            }
+                        }
+                    });
                 }
             }
             
@@ -630,6 +651,29 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
     private void addLog(String tag, String message) {
         Log.i("XiaoZhi-" + tag, message);
+    }
+
+    /**
+     * 轮询 AudioTrack 播放头位置直到停止推进，表示缓冲区已排空。
+     * 连续500ms（5次×100ms）位置不变则视为播放完毕。
+     * 在 audioExecutor 线程中调用，不阻塞主线程。
+     */
+    private void waitForAudioTrackDrain() {
+        if (audioTrack == null) return;
+        try {
+            int stableCount = 0;
+            int lastPos = audioTrack.getPlaybackHeadPosition();
+            while (stableCount < 5) {
+                Thread.sleep(100);
+                int currentPos = audioTrack.getPlaybackHeadPosition();
+                if (currentPos == lastPos) {
+                    stableCount++;
+                } else {
+                    stableCount = 0;
+                    lastPos = currentPos;
+                }
+            }
+        } catch (InterruptedException ignored) {}
     }
 
     @Override
