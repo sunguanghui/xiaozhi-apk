@@ -322,6 +322,7 @@ com.lhht.xiaozhi/
 |---|---|
 | [douo/xiaozhi-android](https://github.com/douo/xiaozhi-android) | WebSocket 协议实现、设备信息格式、音频通道设计 |
 | [huangjunsen0406/py-xiaozhi](https://github.com/huangjunsen0406/py-xiaozhi) | OTA 激活流程、HMAC 签名、clear_audio_queue 回声消除策略 |
+| [niceqwer55555/xiaozhi-apk](https://github.com/niceqwer55555/xiaozhi-apk) | Android 客户端实现参考 |
 
 ---
 
