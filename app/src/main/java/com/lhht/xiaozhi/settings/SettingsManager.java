@@ -52,7 +52,7 @@ public class SettingsManager {
     }
 
     public String getToken() {
-        return preferences.getString(KEY_TOKEN, "test-token");
+        return preferences.getString(KEY_TOKEN, ""); // 默认空，防止 test-token 误导官方服务器鉴权
     }
 
     public boolean isTokenEnabled() {
