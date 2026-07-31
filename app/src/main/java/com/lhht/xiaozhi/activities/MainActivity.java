@@ -24,6 +24,7 @@ import android.widget.Toast;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.lhht.xiaozhi.utils.OtaService;
+import com.lhht.xiaozhi.utils.UpdateChecker;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -187,6 +188,9 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
         // 检查并请求权限
         checkPermissions();
+
+        // 启动时静默检查版本更新（24h内只查一次，国内用Gitee，兜底GitHub）
+        UpdateChecker.checkOnStartup(this);
     }
 
     private void toggleMessageExpansion() {

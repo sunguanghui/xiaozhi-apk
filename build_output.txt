@@ -15,37 +15,30 @@
 > Task :app:processDebugManifest UP-TO-DATE
 > Task :app:processDebugManifestForPackage UP-TO-DATE
 > Task :app:processDebugResources UP-TO-DATE
-> Task :app:compileDebugJavaWithJavac
-> Task :app:mergeDebugShaders UP-TO-DATE
-> Task :app:compileDebugShaders NO-SOURCE
-> Task :app:generateDebugAssets UP-TO-DATE
-> Task :app:mergeDebugAssets UP-TO-DATE
-> Task :app:compressDebugAssets UP-TO-DATE
-> Task :app:processDebugJavaRes NO-SOURCE
-> Task :app:mergeDebugJavaResource UP-TO-DATE
-> Task :app:checkDebugDuplicateClasses UP-TO-DATE
-> Task :app:desugarDebugFileDependencies UP-TO-DATE
-> Task :app:mergeExtDexDebug UP-TO-DATE
-> Task :app:mergeLibDexDebug UP-TO-DATE
-> Task :app:dexBuilderDebug
-> Task :app:configureCMakeDebug[arm64-v8a]
-> Task :app:buildCMakeDebug[arm64-v8a]
-> Task :app:configureCMakeDebug[armeabi-v7a]
-> Task :app:mergeProjectDexDebug
-> Task :app:buildCMakeDebug[armeabi-v7a]
-> Task :app:configureCMakeDebug[x86]
-> Task :app:buildCMakeDebug[x86]
-> Task :app:configureCMakeDebug[x86_64]
-> Task :app:buildCMakeDebug[x86_64]
-> Task :app:mergeDebugJniLibFolders UP-TO-DATE
-> Task :app:mergeDebugNativeLibs UP-TO-DATE
-> Task :app:stripDebugDebugSymbols UP-TO-DATE
-> Task :app:validateSigningDebug UP-TO-DATE
-> Task :app:writeDebugAppMetadata UP-TO-DATE
-> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
-> Task :app:packageDebug
-> Task :app:createDebugApkListingFileRedirect UP-TO-DATE
-> Task :app:assembleDebug
 
-BUILD SUCCESSFUL in 3s
-41 actionable tasks: 12 executed, 29 up-to-date
+> Task :app:compileDebugJavaWithJavac FAILED
+.\gradlew.bat : D:\Project\xiaozhi-apk\app\src\main\java\com\lhht\xiaozhi\activities\SettingsActivity.java:72: ����: �Ҳ�������
+At line:1 char:383
++ ... oop\apps\openjdk17\current"; .\gradlew.bat assembleDebug 2>&1 | Tee-O ...
++                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (D:\Project\xiao...����: �Ҳ�������:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+            checkUpdateButton.setOnClickListener(v -> UpdateChecker.checkManually(this));
+                                                                   ^
+  ����:   ���� checkManually(SettingsActivity)
+  λ��: �� UpdateChecker
+1 ������
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --info option to get more log output.
+> Run with --scan to get full insights.
+
+BUILD FAILED in 2s
+15 actionable tasks: 1 executed, 14 up-to-date
