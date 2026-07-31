@@ -190,17 +190,6 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         // 检查并请求权限
         checkPermissions();
 
-        // 聊天记录输入框获焦时，滚动 NestedScrollView 确保键盘不遮挡输入框
-        androidx.core.widget.NestedScrollView scrollView = findViewById(R.id.mainScrollView);
-        if (scrollView != null && messageInput != null) {
-            messageInput.setOnFocusChangeListener((v, hasFocus) -> {
-                if (hasFocus) {
-                    // 等键盘动画完成后滚动到最底部，确保输入框可见
-                    messageInput.postDelayed(() -> scrollView.fullScroll(View.FOCUS_DOWN), 200);
-                }
-            });
-        }
-
         // 启动时静默检查版本更新
         UpdateChecker.checkOnStartup(this);
 
