@@ -6,6 +6,7 @@
     <color name="bg_status_bar">#1A2535</color>
     <color name="bg_input_bar">#1C1E24</color>
     <color name="bg_input_field">#2A2D35</color>
+    <color name="bg_input">#2A2D35</color>
     <color name="divider">#2E3240</color>
 
     <!-- 文字 -->
