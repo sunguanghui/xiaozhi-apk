@@ -161,7 +161,6 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                     .build())
                 .setBufferSizeInBytes(Math.max(minBufferSize * 8, 32768))  // 增大缓冲区
                 .setTransferMode(AudioTrack.MODE_STREAM)
-                .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
                 .build();
             
             int state = audioTrack.getState();
@@ -614,7 +613,6 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                                             .build())
                                         .setBufferSizeInBytes(Math.max(minBufferSize * 8, 32768))
                                         .setTransferMode(AudioTrack.MODE_STREAM)
-                                        .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
                                         .build();
                                 }
                                 
