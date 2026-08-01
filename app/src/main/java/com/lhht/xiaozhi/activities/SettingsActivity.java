@@ -19,7 +19,6 @@ import com.google.android.material.textfield.TextInputEditText;
 import com.lhht.xiaozhi.R;
 import com.lhht.xiaozhi.settings.SettingsManager;
 import com.lhht.xiaozhi.utils.LogUtils;
-import com.lhht.xiaozhi.utils.UpdateChecker;
 
 import java.io.File;
 
@@ -65,12 +64,6 @@ public class SettingsActivity extends AppCompatActivity {
 
         // 保存按钮
         saveButton.setOnClickListener(v -> saveSettings());
-
-        // 检查更新按钮
-        MaterialButton checkUpdateButton = findViewById(R.id.checkUpdateButton);
-        if (checkUpdateButton != null) {
-            checkUpdateButton.setOnClickListener(v -> UpdateChecker.checkManually(this));
-        }
     }
 
     @Override

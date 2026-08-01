@@ -23,8 +23,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.lhht.xiaozhi.utils.OtaService;
-import com.lhht.xiaozhi.utils.UpdateChecker;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -91,6 +91,8 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     private boolean isMessageExpanded = false;
     private androidx.appcompat.app.AlertDialog bindingDialog;
     private View guideCard; // 操作引导卡片
+    private FloatingActionButton voiceButton; // 语音通话按钮
+    private TextView voiceHintText; // 通话按钮下方说明文字
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -112,6 +114,15 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         messageAdapter = new MessageAdapter();
         messagesRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         messagesRecyclerView.setAdapter(messageAdapter);
+        // 限制消息列表最大高度（wrap_content 下避免撑开过高）
+        final int maxRecyclerHeight = (int) (240 * getResources().getDisplayMetrics().density);
+        messagesRecyclerView.addOnLayoutChangeListener(
+            (v, l, t, r, b, ol, ot, or, ob) -> {
+                if (v.getHeight() > maxRecyclerHeight) {
+                    v.getLayoutParams().height = maxRecyclerHeight;
+                    v.requestLayout();
+                }
+            });
 
         // 消息历史折叠/展开
         messageHeaderLayout.setOnClickListener(v -> toggleMessageExpansion());
@@ -178,7 +189,8 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         sendButton = findViewById(R.id.sendButton);
 
         // 绑定新布局按钮
-        ImageButton voiceButton = findViewById(R.id.voiceButton);
+        voiceButton = findViewById(R.id.voiceButton);
+        voiceHintText = findViewById(R.id.voiceHintText);
         ImageButton settingsButton = findViewById(R.id.settingsButton);
 
         // 设置按钮点击事件
@@ -189,9 +201,6 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
         // 检查并请求权限
         checkPermissions();
-
-        // 启动时静默检查版本更新
-        UpdateChecker.checkOnStartup(this);
 
         // 操作引导：未连接过时显示引导卡片
         guideCard = findViewById(R.id.guideCard);
@@ -227,6 +236,11 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
     private void toggleConnection() {
         if (!webSocketManager.isConnected()) {
+            // 重置按钮文字（可能之前因错误显示"重新连接"）
+            connectButton.setText(R.string.connect);
+            connectButton.setEnabled(false); // 连接过程中禁用，防止重复点击
+            connectionStatus.setText("正在连接…");
+            updateStatusDot(R.color.status_disconnected);
             if (settingsManager.isUseOfficialServer()) {
                 // 官方模式：先调 OTA API 获取激活码或确认已绑定，再连 WebSocket
                 connectOfficialServer();
@@ -257,12 +271,23 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                 bindingDialog = new MaterialAlertDialogBuilder(MainActivity.this)
                     .setTitle("设备未绑定")
                     .setMessage(dialogMsg)
-                    .setCancelable(true)
-                    .setNegativeButton("取消", (dialog, which) -> {
+                    .setCancelable(false)  // 防止误触关闭，避免用户看不到验证码
+                    .setPositiveButton("复制验证码", (dialog, which) -> {
+                        // 复制验证码到剪贴板
+                        android.content.ClipboardManager clipboard =
+                            (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                        android.content.ClipData clip = android.content.ClipData.newPlainText("验证码", code);
+                        clipboard.setPrimaryClip(clip);
+                        Toast.makeText(MainActivity.this, "验证码已复制", Toast.LENGTH_SHORT).show();
+                        // 不关闭对话框，让用户继续查看
+                    })
+                    .setNegativeButton("放弃绑定", (dialog, which) -> {
+                        OtaService.stopPolling();  // 停止后台轮询
                         dialog.dismiss();
                         bindingDialog = null;
                         connectionStatus.setText(getString(R.string.status_disconnected));
                         updateStatusDot(R.color.status_disconnected);
+                        Toast.makeText(MainActivity.this, "已取消绑定", Toast.LENGTH_SHORT).show();
                     })
                     .show();
             }
@@ -307,7 +332,13 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
     private void startCall() {
         if (!webSocketManager.isConnected()) {
-            Toast.makeText(this, "请先连接服务器", Toast.LENGTH_SHORT).show();
+            // 未连接时弹引导 Dialog，提供"去连接"快捷入口
+            new MaterialAlertDialogBuilder(this)
+                .setTitle("尚未连接服务器")
+                .setMessage("需要先连接服务器才能开始语音聊天。")
+                .setPositiveButton("去连接", (d, w) -> toggleConnection())
+                .setNegativeButton("取消", null)
+                .show();
             return;
         }
 
@@ -334,6 +365,11 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             voiceContainer.setVisibility(View.VISIBLE);
             callStatusText.setVisibility(View.VISIBLE);
             callStatusText.setText(R.string.calling);
+            // 通话中：深蓝色 + 停止图标 + 文案更新
+            voiceButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                ContextCompat.getColor(this, R.color.primary_dark)));
+            voiceButton.setImageResource(R.drawable.ic_stop);
+            if (voiceHintText != null) voiceHintText.setText("点击结束通话");
         });
         
         executorService.execute(() -> {
@@ -409,6 +445,11 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             voiceContainer.setVisibility(View.GONE);
             callStatusText.setVisibility(View.GONE);
             waveformView.setAmplitude(0);
+            // 恢复待机态：亮蓝色 + 麦克风图标 + 文案恢复
+            voiceButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                ContextCompat.getColor(this, R.color.primary)));
+            voiceButton.setImageResource(R.drawable.ic_mic);
+            if (voiceHintText != null) voiceHintText.setText("点击开始聊天");
         });
 
         // 释放 AudioRecord，下次通话重新创建，避免复用已停止的实例导致第二次通话失效
@@ -432,8 +473,18 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
     private void sendMessage() {
         String message = messageInput.getText().toString().trim();
-        if (!message.isEmpty() && webSocketManager.isConnected()) {
-            try {
+        if (message.isEmpty()) return;
+        if (!webSocketManager.isConnected()) {
+            // 未连接时弹引导 Dialog，提供"去连接"快捷入口
+            new MaterialAlertDialogBuilder(this)
+                .setTitle("尚未连接服务器")
+                .setMessage("需要先连接服务器才能发送消息。")
+                .setPositiveButton("去连接", (d, w) -> toggleConnection())
+                .setNegativeButton("取消", null)
+                .show();
+            return;
+        }
+        try {
                 JSONObject jsonMessage = new JSONObject();
                 jsonMessage.put("type", "listen");
                 jsonMessage.put("state", "detect");
@@ -447,7 +498,6 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        }
     }
 
     private void openSettings() {
@@ -461,6 +511,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         runOnUiThread(() -> {
             connectionStatus.setText(R.string.status_connected);
             connectButton.setText(R.string.disconnect);
+            connectButton.setEnabled(true);
             updateStatusDot(R.color.status_connected);
             // 第一次连接成功时自动关闭操作引导
             hideGuide();
@@ -473,6 +524,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         runOnUiThread(() -> {
             connectionStatus.setText(R.string.status_disconnected);
             connectButton.setText(R.string.connect);
+            connectButton.setEnabled(true);
             updateStatusDot(R.color.status_disconnected);
             endCall();
         });
@@ -484,6 +536,8 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         runOnUiThread(() -> {
             connectionStatus.setText(R.string.status_error);
             updateStatusDot(R.color.status_error);
+            connectButton.setText("重新连接");
+            connectButton.setEnabled(true);
             Toast.makeText(this, "错误: " + error, Toast.LENGTH_SHORT).show();
         });
     }
@@ -607,12 +661,20 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             if ("tts".equals(type) && "sentence_start".equals(state) && jsonMessage.has("text")) {
                 String text = jsonMessage.getString("text");
                 runOnUiThread(() -> {
+                    // 首条消息时自动展开消息区
+                    if (!isMessageExpanded && messageAdapter.getItemCount() == 0) {
+                        toggleMessageExpansion();
+                    }
                     messageAdapter.addMessage(new Message(text, true));
                     messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);
                 });
             } else if ("stt".equals(type) && jsonMessage.has("text")) {
                 String text = jsonMessage.getString("text");
                 runOnUiThread(() -> {
+                    // 首条消息时自动展开消息区
+                    if (!isMessageExpanded && messageAdapter.getItemCount() == 0) {
+                        toggleMessageExpansion();
+                    }
                     messageAdapter.addMessage(new Message(text, false)); // 用户的话
                     messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);
                 });
@@ -659,6 +721,12 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                 if (decodedSamples == 0) {
                     return;
                 }
+
+                // 计算 RMS 振幅并驱动波形动画（AI 播放时）
+                long sumSq = 0;
+                for (int i = 0; i < decodedSamples; i++) sumSq += (long) decodedBuffer[i] * decodedBuffer[i];
+                float rms = (float) Math.sqrt((double) sumSq / decodedSamples) / 32768f;
+                runOnUiThread(() -> waveformView.setPlayingAmplitude(rms));
 
                 // 将 short[] 转换为 byte[]
                 byte[] pcmData = new byte[decodedSamples * 2];

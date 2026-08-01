@@ -6,7 +6,7 @@
 [![Android](https://img.shields.io/badge/Android-10%2B-green)](https://developer.android.com)
 [![Java](https://img.shields.io/badge/Java-11-blue)](https://www.java.com)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/sunguanghui/xiaozhi-apk)](https://gitee.com/sunguanghui1989/xiaozhi-apk/releases)
+[![Release](https://img.shields.io/github/v/release/sunguanghui/xiaozhi-apk)](https://github.com/sunguanghui/xiaozhi-apk/releases)
 
 ---
 
@@ -20,7 +20,6 @@
 | 🌐 官方平台接入 | 对接 xiaozhi.me，扫码绑定，开箱即用 |
 | 🏠 自建服务器 | 支持局域网私有部署，完全可控 |
 | 🔄 自动重连 | 断线后自动重连，5 秒间隔，稳定可靠 |
-| 🔔 版本更新提醒 | 启动时自动检查（Gitee 优先，GitHub 兜底） |
 | 🌙 深色/浅色主题 | 跟随系统自动切换 |
 | 🔐 回声消除 | TTS 播放期间自动抑制录音发送，防止回声 |
 
@@ -30,7 +29,7 @@
 
 ### 下载安装
 
-从 [Gitee Releases](https://gitee.com/sunguanghui1989/xiaozhi-apk/releases) 下载最新 APK，安装到 Android 10+ 设备。
+从 [GitHub Releases](https://github.com/sunguanghui/xiaozhi-apk/releases) 下载最新 APK，安装到 Android 10+ 设备。
 
 > 安装时需允许"安装未知应用"权限。
 
@@ -166,28 +165,11 @@ App 会先请求官方 OTA 接口获取激活状态：
 | Token | 服务器认证令牌（仅在自建模式下显示） |
 | 启用 Token 认证 | 是否在连接时携带 Bearer Token |
 | 保存 | 保存所有设置，自动返回主界面 |
-| 检查更新 | 手动检查是否有新版本，优先走 Gitee（国内可访问）|
 | 导出调试日志 | 右上角菜单 → 导出日志文件，用于排查问题 |
 
 ---
 
-### 七、版本更新
-
-**自动检查**：App 每次启动时静默检查，每 24 小时最多一次，有新版本时弹窗提示。
-
-**手动检查**：设置页 → 点击"检查更新"按钮。
-
-**更新弹窗选项**：
-
-| 按钮 | 行为 |
-|---|---|
-| 立即更新 | 打开浏览器前往 Gitee Releases 页面下载 APK |
-| 跳过此版本 | 此版本不再提示，等下次有更新再弹窗 |
-| 稍后提醒 | 关闭弹窗，下次启动时继续提示 |
-
----
-
-### 八、调试与排障
+### 七、调试与排障
 
 **导出日志**
 
@@ -237,10 +219,7 @@ cd xiaozhi-apk
 
 每次推送到 `main` 分支，GitHub Actions 自动构建 Debug + Release APK。
 
-发布新版本时，在 GitHub 创建 Release，Actions 自动：
-1. 构建签名 Release APK
-2. 同步代码到 Gitee
-3. 在 Gitee 创建对应 Release 并上传 APK
+发布新版本时，在 GitHub 创建 Release，Actions 自动构建签名 Release APK 并上传。
 
 **所需 Secrets**（在 GitHub 仓库 Settings → Secrets 中配置）：
 
@@ -250,7 +229,6 @@ cd xiaozhi-apk
 | `KEYSTORE_PASSWORD` | Keystore 密码 |
 | `KEY_ALIAS` | Key 别名 |
 | `KEY_PASSWORD` | Key 密码 |
-| `GITEE_TOKEN` | Gitee 个人访问令牌（用于代码同步） |
 
 ---
 
@@ -272,8 +250,7 @@ com.lhht.xiaozhi/
 │   └── SettingsManager.java    # 配置持久化（SharedPreferences）
 ├── utils/
 │   ├── LogUtils.java           # 日志工具（文件写入 + SAF 导出）
-│   ├── OtaService.java         # OTA HTTP 接口（设备激活/绑定）
-│   └── UpdateChecker.java      # 版本更新检查（Gitee + GitHub）
+│   └── OtaService.java         # OTA HTTP 接口（设备激活/绑定）
 ├── views/
 │   └── WaveformView.java       # 自定义波形动画 View
 └── websocket/
@@ -331,7 +308,6 @@ com.lhht.xiaozhi/
 - 官方小智平台：[xiaozhi.me](https://xiaozhi.me)
 - 自建服务器：[xiaozhi-esp32-server](https://github.com/xinnan-tech/xiaozhi-esp32-server)
 - ESP32 协议文档：[xiaozhi-esp32](https://github.com/78/xiaozhi-esp32)
-- Gitee 镜像仓库：[gitee.com/sunguanghui1989/xiaozhi-apk](https://gitee.com/sunguanghui1989/xiaozhi-apk)
 
 ---
 

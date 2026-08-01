@@ -48,6 +48,9 @@ public class OtaService {
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
     private static final Handler mainHandler = new Handler(Looper.getMainLooper());
 
+    // 轮询控制标志位（volatile 保证线程间可见性）
+    private static volatile boolean isPolling = false;
+
     public static void checkActivation(Context context, SettingsManager sm, OtaCallback callback) {
         String macAddress = sm.getFormattedDeviceId(context);
         String clientId   = sm.getClientId();
@@ -112,11 +115,18 @@ public class OtaService {
         });
     }
 
+    /** 停止激活轮询 */
+    public static void stopPolling() {
+        isPolling = false;
+        LogUtils.getInstance().d(null, "OtaService", "用户主动停止激活轮询");
+    }
+
     /** 轮询 /ota/activate，最多60次（每次间隔5秒） */
     private static void pollActivation(Context context, SettingsManager sm,
                                        String challenge, String code,
                                        String serialNum, String hmacKey,
                                        OtaCallback callback) {
+        isPolling = true; // 开始轮询
         executor.execute(() -> {
             try {
                 String hmacSignature = hmacSha256(hmacKey, challenge);
@@ -135,7 +145,7 @@ public class OtaService {
                 LogUtils.getInstance().d(context, "OtaService",
                         "开始激活轮询 serial=" + serialNum);
 
-                for (int attempt = 0; attempt < 60; attempt++) {
+                for (int attempt = 0; attempt < 60 && isPolling; attempt++) {
                     try {
                         String resp = postJson(ACTIVATE_URL, body,
                                 macAddress, clientId, "2");
@@ -143,6 +153,7 @@ public class OtaService {
                         // HTTP 200 → 激活成功
                         LogUtils.getInstance().d(context, "OtaService",
                                 "激活轮询 " + (attempt + 1) + "/60 成功");
+                        isPolling = false;
                         mainHandler.post(callback::onAlreadyActivated);
                         return;
 
@@ -158,8 +169,16 @@ public class OtaService {
                     }
                 }
 
-                LogUtils.getInstance().d(context, "OtaService", "激活超时（5分钟）");
-                mainHandler.post(() -> callback.onError("激活超时，请重新尝试"));
+                // 循环结束后检查是否被手动停止
+                if (isPolling) {
+                    // 未被手动停止，说明是超时退出
+                    LogUtils.getInstance().d(context, "OtaService", "激活超时（5分钟）");
+                    mainHandler.post(() -> callback.onError("激活超时，请重新尝试"));
+                } else {
+                    // 被手动停止
+                    LogUtils.getInstance().d(context, "OtaService", "激活轮询已被用户停止");
+                }
+                isPolling = false;
 
             } catch (Exception e) {
                 LogUtils.getInstance().e(context, "OtaService", "激活轮询失败", e);

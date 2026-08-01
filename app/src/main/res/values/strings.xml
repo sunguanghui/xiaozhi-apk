@@ -34,5 +34,4 @@
     <string name="settings_saved">设置已保存</string>
     <string name="ws_url">WebSocket 地址</string>
     <string name="input_hint">输入消息…</string>
-    <string name="check_update">检查更新</string>
 </resources>
