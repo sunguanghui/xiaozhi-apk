@@ -83,7 +83,7 @@ public class OnboardingActivity extends AppCompatActivity {
         pages.add(new OnboardingPage(
                 R.drawable.ic_mic,
                 "需要麦克风权限",
-                "语音对话需要访问麦克风\n如暂不授权，仍可使用文字模式与 AI 交流\n后续可随时在系统设置中开启"
+                "语音对话需要麦克风权限\n暂不授权也可用文字与 AI 交流"
         ));
 
         // 设置ViewPager

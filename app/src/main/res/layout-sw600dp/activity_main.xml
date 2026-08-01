@@ -275,7 +275,7 @@
                     android:textColor="@color/text_secondary" />
             </LinearLayout>
 
-            <!-- 操作引导卡片（首次使用） -->
+            <!-- 操作提示条（首次连接前显示，连接成功后自动消失） -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/guideCard"
                 android:layout_width="0dp"
@@ -284,8 +284,8 @@
                 android:layout_marginEnd="16dp"
                 android:layout_marginBottom="8dp"
                 android:visibility="gone"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="2dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="1dp"
                 app:strokeColor="@color/primary"
                 app:strokeWidth="1dp"
                 app:layout_constraintBottom_toTopOf="@id/voiceZone"
@@ -295,26 +295,21 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="8dp"
+                    android:paddingTop="12dp"
+                    android:paddingBottom="12dp">
 
                     <TextView
-                        android:layout_width="wrap_content"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:text="🚀 如何开始使用"
-                        android:textSize="15sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/text_primary"
-                        android:layout_marginBottom="12dp" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="① 点击右上角⚙，配置服务器并保存\n② 点击蓝色连接按钮，等待状态点变绿\n③ 按下方 🎤 麦克风大按钮，开始语音聊天！"
+                        android:layout_weight="1"
+                        android:text="💡 点击上方「连接」按钮，开始你的第一次对话"
                         android:textSize="14sp"
                         android:textColor="@color/text_primary"
-                        android:lineSpacingExtra="4dp"
-                        android:layout_marginBottom="12dp" />
+                        android:lineSpacingExtra="2dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/guideDismissButton"
@@ -322,9 +317,9 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:minHeight="48dp"
-                        android:layout_gravity="end"
                         android:text="知道了"
-                        android:textSize="14sp" />
+                        android:textSize="13sp" />
+
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
