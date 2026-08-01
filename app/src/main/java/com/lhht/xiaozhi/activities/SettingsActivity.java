@@ -28,8 +28,9 @@ public class SettingsActivity extends AppCompatActivity {
     private TextInputEditText tokenInput;
     private SwitchMaterial enableTokenSwitch;
     private SwitchMaterial useOfficialSwitch;
-    private MaterialCardView officialConfigCard;
-    private MaterialCardView selfHostConfigCard;
+    // 大屏布局（sw600dp）中该容器为 LinearLayout，使用基类 View 兼容两种布局
+    private View officialConfigCard;
+    private View selfHostConfigCard;
     private TextView deviceIdText;
 
     @Override

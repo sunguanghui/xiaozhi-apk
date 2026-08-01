@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    大尺寸平板横屏布局（sw >= 900dp + land）
+    左右 6:4 分栏：左侧消息区 / 右侧语音控制区
+    所有 View ID 与手机布局完全一致，Java 层无需修改
+-->
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_page">
+
+    <!-- 垂直分隔线（60% 处） -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/splitGuideline"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.60" />
+
+    <!-- 左侧分隔线阴影 -->
+    <View
+        android:layout_width="1dp"
+        android:layout_height="0dp"
+        android:background="@color/divider"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toEndOf="@id/splitGuideline" />
+
+    <!-- ══════════════════════════════════════════════════════════════
+         左侧面板：消息历史 + 文字输入（始终展开）
+         ══════════════════════════════════════════════════════════════ -->
+
+    <!-- 左侧标题栏 -->
+    <LinearLayout
+        android:id="@+id/messageHeaderLayout"
+        android:layout_width="0dp"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:background="@color/bg_surface"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/splitGuideline">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_chat"
+            android:tint="@color/text_secondary" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:text="聊天记录"
+            android:textSize="15sp"
+            android:textColor="@color/text_primary" />
+
+        <!-- 新消息红点（折叠态提示，横屏始终展开所以通常不可见） -->
+        <View
+            android:id="@+id/messageBadge"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/bg_status_dot"
+            android:backgroundTint="#EF4444"
+            android:visibility="gone" />
+
+        <!-- 横屏无需展开箭头，但保留 ID 供 Java 判空兼容 -->
+        <ImageView
+            android:id="@+id/messageExpandIcon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:visibility="invisible"
+            android:src="@drawable/ic_expand_more"
+            android:tint="@color/text_secondary" />
+    </LinearLayout>
+
+    <!-- 消息列表（左侧，铺满剩余高度） -->
+    <LinearLayout
+        android:id="@+id/messageContentLayout"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        android:visibility="visible"
+        app:layout_constraintTop_toBottomOf="@id/messageHeaderLayout"
+        app:layout_constraintBottom_toTopOf="@id/inputBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/splitGuideline">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/messagesRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:padding="12dp"
+            android:clipToPadding="false" />
+    </LinearLayout>
+
+    <!-- 文字输入区（左侧底部固定） -->
+    <LinearLayout
+        android:id="@+id/inputBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:gravity="center_vertical"
+        android:background="@color/bg_input"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/splitGuideline">
+
+        <EditText
+            android:id="@+id/messageInput"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@drawable/bg_input"
+            android:hint="@string/input_hint"
+            android:maxLines="4"
+            android:minHeight="40dp"
+            android:padding="10dp"
+            android:textSize="15sp" />
+
+        <ImageButton
+            android:id="@+id/sendButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_send_button"
+            android:contentDescription="@string/send"
+            android:padding="10dp"
+            android:src="@drawable/ic_send"
+            android:tint="@android:color/white" />
+    </LinearLayout>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         右侧面板：连接控制 + 语音通话
+         ══════════════════════════════════════════════════════════════ -->
+
+    <!-- 右侧顶部状态栏 -->
+    <LinearLayout
+        android:id="@+id/rightTopBar"
+        android:layout_width="0dp"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="8dp"
+        android:background="@color/bg_surface"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toEndOf="@id/splitGuideline"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <View
+            android:id="@+id/statusDot"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/bg_status_dot"
+            android:backgroundTint="@color/status_disconnected" />
+
+        <TextView
+            android:id="@+id/connectionStatus"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="@string/status_disconnected"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp" />
+
+        <ImageButton
+            android:id="@+id/settingsButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/settings"
+            android:padding="8dp"
+            android:src="@drawable/ic_settings"
+            android:tint="@color/text_secondary" />
+    </LinearLayout>
+
+    <!-- 连接/断开按钮 -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/connectButton"
+        android:layout_width="wrap_content"
+        android:layout_height="48dp"
+        android:layout_marginTop="16dp"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:text="@string/connect"
+        android:textSize="15sp"
+        app:cornerRadius="24dp"
+        app:icon="@drawable/ic_link"
+        app:iconGravity="start"
+        app:layout_constraintTop_toBottomOf="@id/rightTopBar"
+        app:layout_constraintStart_toEndOf="@id/splitGuideline"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Aurora 波纹容器（通话时显示） -->
+    <LinearLayout
+        android:id="@+id/voiceContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:visibility="gone"
+        android:padding="16dp"
+        app:layout_constraintBottom_toTopOf="@id/voiceButton"
+        app:layout_constraintStart_toEndOf="@id/splitGuideline"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/connectButton">
+
+        <TextView
+            android:id="@+id/callStatusText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/calling"
+            android:textSize="16sp"
+            android:textColor="@color/primary"
+            android:layout_marginBottom="16dp" />
+
+        <com.lhht.xiaozhi.views.WaveformView
+            android:id="@+id/waveformView"
+            android:layout_width="match_parent"
+            android:layout_height="100dp" />
+    </LinearLayout>
+
+    <!-- 大圆形通话按钮（右侧垂直居中） -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/voiceButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:contentDescription="开始聊天"
+        app:fabSize="auto"
+        app:fabCustomSize="130dp"
+        app:maxImageSize="60dp"
+        app:srcCompat="@drawable/ic_mic"
+        app:tint="@android:color/white"
+        app:elevation="6dp"
+        app:backgroundTint="@color/primary"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toEndOf="@id/splitGuideline"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- 通话按钮说明文字 -->
+    <TextView
+        android:id="@+id/voiceHintText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="点击开始聊天"
+        android:textSize="14sp"
+        android:textColor="@color/text_secondary"
+        app:layout_constraintTop_toBottomOf="@id/voiceButton"
+        app:layout_constraintStart_toEndOf="@id/splitGuideline"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- 操作引导卡片（隐藏，由 Java 控制） -->
+    <View
+        android:id="@+id/guideCard"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

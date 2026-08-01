@@ -4,6 +4,7 @@ import android.Manifest;
 import android.animation.ObjectAnimator;
 import android.content.Intent;
 import android.view.HapticFeedbackConstants;
+import android.view.KeyEvent;
 import android.content.pm.PackageManager;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
@@ -554,6 +555,36 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     private void openSettings() {
         Intent intent = new Intent(this, SettingsActivity.class);
         startActivity(intent);
+    }
+
+    /**
+     * 物理键盘快捷键支持（Task 4）：
+     *   Space  → 切换通话（对讲机模式，需已连接且非文字输入状态）
+     *   Enter  → 发送消息（输入框获焦时，非 Shift+Enter）
+     */
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            int code = event.getKeyCode();
+
+            // Space：切换语音通话（PTT 快捷唤醒 / 挂断）
+            if (code == KeyEvent.KEYCODE_SPACE) {
+                boolean inputFocused = messageInput != null && messageInput.isFocused();
+                if (!inputFocused && webSocketManager != null && webSocketManager.isConnected()) {
+                    if (voiceButton != null) voiceButton.performClick();
+                    return true;
+                }
+            }
+
+            // Enter：发送文字消息（输入框获焦且非 Shift+Enter）
+            if (code == KeyEvent.KEYCODE_ENTER && !event.isShiftPressed()) {
+                if (messageInput != null && messageInput.isFocused()) {
+                    sendMessage();
+                    return true;
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     @Override
