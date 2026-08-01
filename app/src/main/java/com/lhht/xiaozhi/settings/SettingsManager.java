@@ -54,7 +54,8 @@ public class SettingsManager {
     // ── 官方平台开关 ─────────────────────────────────────────────────────────
 
     public boolean isUseOfficialServer() {
-        return preferences.getBoolean(KEY_USE_OFFICIAL, false);
+        // 默认官方模式：新用户开箱即用，无需手动配置
+        return preferences.getBoolean(KEY_USE_OFFICIAL, true);
     }
 
     public void setUseOfficialServer(boolean useOfficial) {

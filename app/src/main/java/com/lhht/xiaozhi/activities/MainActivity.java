@@ -276,7 +276,23 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
     private void toggleConnection() {
         if (!webSocketManager.isConnected()) {
-            // 重置按钮文字（可能之前因错误显示"重新连接"）
+            // 自建模式 + URL 未配置（空或默认 localhost）→ 引导去设置，不发起连接
+            if (!settingsManager.isUseOfficialServer()) {
+                String wsUrl = settingsManager.getWsUrl();
+                boolean isUnconfigured = wsUrl.isEmpty()
+                        || wsUrl.contains("localhost")
+                        || wsUrl.contains("127.0.0.1");
+                if (isUnconfigured) {
+                    new MaterialAlertDialogBuilder(this)
+                            .setTitle("还未配置服务器")
+                            .setMessage("您当前使用自建模式，但还未填写服务器地址。\n\n请前往设置填写 WebSocket 地址，或切换到官方小智平台直接使用。")
+                            .setPositiveButton("去设置", (d, w) -> openSettings())
+                            .setNegativeButton("取消", null)
+                            .show();
+                    return; // 提前返回，按钮状态不变
+                }
+            }
+            // 配置合法，进入连接流程
             connectButton.setText(R.string.connect);
             connectButton.setEnabled(false); // 连接过程中禁用，防止重复点击
             connectionStatus.setText("正在连接…");
