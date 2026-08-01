@@ -55,27 +55,35 @@ public class OnboardingActivity extends AppCompatActivity {
         dotIndicator = findViewById(R.id.dotIndicator);
         TextView skipButton = findViewById(R.id.skipButton);
 
-        // 准备引导页数据
+        // 准备引导页数据（与当前功能保持一致）
         pages = new ArrayList<>();
+
+        // 第1页：欢迎
         pages.add(new OnboardingPage(
-                R.drawable.ic_call,
-                "欢迎使用小智语音助手",
-                "通过语音与AI助手自然对话\n支持官方平台和自建服务器"
+                R.drawable.ic_mic,
+                "欢迎使用灵犀",
+                "心有灵犀一点通\n与 AI 实时语音对话，还支持文字交流\n官方小智平台与自建服务器均可接入"
         ));
+
+        // 第2页：连接方式（修正：是验证码绑定，不是扫码）
         pages.add(new OnboardingPage(
                 R.drawable.ic_settings,
-                "灵活的连接方式",
-                "官方平台：开箱即用，扫码绑定\n自建服务器：完全掌控，私有部署"
+                "两种接入方式",
+                "🌐 官方平台（推荐）\n设置→开启官方模式→点击连接\n输入6位验证码在 xiaozhi.me 完成绑定\n\n🏠 自建服务器\n填写 WebSocket 地址即可直连"
         ));
+
+        // 第3页：核心交互三步走
         pages.add(new OnboardingPage(
                 R.drawable.ic_chat,
-                "语音+文字双模式",
-                "主界面大按钮轻松开启语音对话\n文字输入作为辅助交互方式"
+                "三步开始聊天",
+                "① 点击右上角 ⚙ 进入设置并配置\n② 点击「连接」，等待状态点变绿\n③ 点击麦克风按钮，开始语音对话！\n\n💡 长按麦克风可快速打开设置"
         ));
+
+        // 第4页：权限申请
         pages.add(new OnboardingPage(
-                android.R.drawable.ic_dialog_info,
+                R.drawable.ic_mic,
                 "需要麦克风权限",
-                "为了实现语音对话功能\n应用需要访问您的麦克风"
+                "语音对话需要访问麦克风\n如暂不授权，仍可使用文字模式与 AI 交流\n后续可随时在系统设置中开启"
         ));
 
         // 设置ViewPager
