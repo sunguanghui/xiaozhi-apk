@@ -3,44 +3,39 @@ package com.lhht.xiaozhi.views;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.Shader;
+import android.os.Build;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
 
+import androidx.core.content.ContextCompat;
+
+import com.lhht.xiaozhi.R;
+
 /**
  * Aurora Wave View - Siri 极光风格多层波纹动画。
  *
- * 特性：
- * - 3 层独立正弦波，各有相位偏移和振幅系数
- * - 每层使用 LinearGradient 渐变填充，叠加 SCREEN 混合产生极光微光效果
- * - ValueAnimator 驱动相位持续自增，待机时保持呼吸感，波纹绝不静止
- * - 输入振幅（麦克风 / AI 播放）通过 Lerp 平滑过渡，避免突变
- * - 抛物线边缘衰减：波纹在 View 左右两侧收拢为零
- * - 硬件加速：setLayerType(LAYER_TYPE_HARDWARE) 保证 SCREEN 混合正确渲染
+ * 颜色来源：wave_l0_start/end、wave_l1_start/end、wave_l2_start/end
+ *   在 values/colors.xml 中定义亮色极光，values-night/colors.xml 中定义低饱和暗色。
+ *
+ * 渲染策略（按 API 自动切换）：
+ *   API 26+：硬件加速 + canvas.saveLayer + PorterDuff.SCREEN（完整极光效果）
+ *   API 21-25：直接叠绘，颜色统一为 primary 主色不同 alpha，色彩纯净无脏色
+ *
+ * 动画生命周期：onVisibilityChanged / onDetachedFromWindow 感知，GONE 时暂停节省资源。
  */
 public class WaveformView extends View {
 
-    /** 每层初始相位偏移（弧度） */
     private static final float[] PHASE_OFFSETS = {0f, 2.09f, 4.19f};
-
-    /** 每层相位推进速度倍率 */
-    private static final float[] SPEED_MULTS = {1.0f, 0.72f, 0.51f};
-
-    /** 每层振幅系数 */
-    private static final float[] AMP_MULTS = {1.0f, 0.75f, 0.56f};
-
-    /** 每层渐变色 [startColor, endColor] */
-    private static final int[][] LAYER_COLORS = {
-        {0xFF00CFFF, 0xFF0055FF},
-        {0xFFFF6EC7, 0xFFA855F7},
-        {0xFF00FFA3, 0xFF00D4FF},
-    };
+    private static final float[] SPEED_MULTS   = {1.0f, 0.72f, 0.51f};
+    private static final float[] AMP_MULTS     = {1.0f, 0.75f, 0.56f};
 
     private static final int   LAYER_COUNT     = 3;
     private static final float IDLE_AMP_FRAC   = 0.07f;
@@ -48,10 +43,14 @@ public class WaveformView extends View {
     private static final float LERP_FACTOR     = 0.12f;
     private static final float WAVE_FREQ       = 1.4f;
 
+    /** API 26+ 使用 SCREEN 混合，低端机退为半透明叠绘 */
+    private final boolean useScreenBlend = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O;
+
+    /** 每层渐变色 [start, end]，在 init() 中根据模式从资源解析 */
+    private final int[][] resolvedColors = new int[LAYER_COUNT][2];
+
     private final Paint[] layerPaints = new Paint[LAYER_COUNT];
     private final Path    wavePath    = new Path();
-    private final PorterDuffXfermode screenXfer =
-            new PorterDuffXfermode(PorterDuff.Mode.SCREEN);
 
     private ValueAnimator phaseAnimator;
     private float globalPhase      = 0f;
@@ -69,13 +68,35 @@ public class WaveformView extends View {
     }
 
     private void init() {
-        setLayerType(LAYER_TYPE_HARDWARE, null);
+        if (useScreenBlend) {
+            setLayerType(LAYER_TYPE_HARDWARE, null);
+            // 高端机：从资源读取极光色，支持 values-night 深色覆盖
+            resolvedColors[0][0] = ContextCompat.getColor(getContext(), R.color.wave_l0_start);
+            resolvedColors[0][1] = ContextCompat.getColor(getContext(), R.color.wave_l0_end);
+            resolvedColors[1][0] = ContextCompat.getColor(getContext(), R.color.wave_l1_start);
+            resolvedColors[1][1] = ContextCompat.getColor(getContext(), R.color.wave_l1_end);
+            resolvedColors[2][0] = ContextCompat.getColor(getContext(), R.color.wave_l2_start);
+            resolvedColors[2][1] = ContextCompat.getColor(getContext(), R.color.wave_l2_end);
+        } else {
+            // 低端机降级：统一使用 primary 蓝，三层只区分 alpha，不混色，不出脏色
+            int base = ContextCompat.getColor(getContext(), R.color.primary);
+            int r = Color.red(base), g = Color.green(base), b = Color.blue(base);
+            int c0 = Color.argb(0xCC, r, g, b); // 80% 不透明
+            int c1 = Color.argb(0x80, r, g, b); // 50% 不透明
+            int c2 = Color.argb(0x4D, r, g, b); // 30% 不透明
+            resolvedColors[0] = new int[]{c0, c0};
+            resolvedColors[1] = new int[]{c1, c1};
+            resolvedColors[2] = new int[]{c2, c2};
+        }
+
+        PorterDuffXfermode screenXfer = new PorterDuffXfermode(PorterDuff.Mode.SCREEN);
         for (int i = 0; i < LAYER_COUNT; i++) {
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             p.setStyle(Paint.Style.FILL);
-            if (i > 0) p.setXfermode(screenXfer);
+            if (useScreenBlend && i > 0) p.setXfermode(screenXfer);
             layerPaints[i] = p;
         }
+
         phaseAnimator = ValueAnimator.ofFloat(0f, (float) (2 * Math.PI));
         phaseAnimator.setDuration(3000);
         phaseAnimator.setRepeatCount(ValueAnimator.INFINITE);
@@ -92,10 +113,11 @@ public class WaveformView extends View {
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
         if (w == 0 || h == 0) return;
+        // 将解析好的颜色绑定到各层渐变 shader
         for (int i = 0; i < LAYER_COUNT; i++) {
             layerPaints[i].setShader(new LinearGradient(
                     0, h * 0.5f, w, h * 0.5f,
-                    LAYER_COLORS[i][0], LAYER_COLORS[i][1],
+                    resolvedColors[i][0], resolvedColors[i][1],
                     Shader.TileMode.CLAMP));
         }
     }
@@ -108,14 +130,21 @@ public class WaveformView extends View {
         if (w == 0 || h == 0) return;
 
         float centerY  = h * 0.5f;
-        float idleAmp  = h * IDLE_AMP_FRAC;
-        float totalAmp = idleAmp + displayAmplitude;
+        float totalAmp = h * IDLE_AMP_FRAC + displayAmplitude;
 
-        int sc = canvas.saveLayer(0, 0, w, h, null);
+        if (useScreenBlend) {
+            int sc = canvas.saveLayer(0, 0, w, h, null);
+            drawLayers(canvas, w, h, centerY, totalAmp);
+            canvas.restoreToCount(sc);
+        } else {
+            drawLayers(canvas, w, h, centerY, totalAmp);
+        }
+    }
+
+    private void drawLayers(Canvas canvas, int w, int h, float centerY, float totalAmp) {
         for (int i = 0; i < LAYER_COUNT; i++) {
             float phaseShift = globalPhase * SPEED_MULTS[i] + PHASE_OFFSETS[i];
             float layerAmp   = totalAmp * AMP_MULTS[i];
-
             wavePath.reset();
             wavePath.moveTo(0, h);
             for (int x = 0; x <= w; x += 3) {
@@ -130,31 +159,45 @@ public class WaveformView extends View {
             wavePath.close();
             canvas.drawPath(wavePath, layerPaints[i]);
         }
-        canvas.restoreToCount(sc);
     }
+
+    // ── 动画生命周期 ──────────────────────────────────────────────────────────
 
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        if (!phaseAnimator.isRunning()) phaseAnimator.start();
+        resumeAnimator();
     }
 
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        phaseAnimator.cancel();
+        pauseAnimator();
     }
 
-    /**
-     * 设置麦克风输入振幅（0.0~1.0）。
-     */
+    @Override
+    protected void onVisibilityChanged(View changedView, int visibility) {
+        super.onVisibilityChanged(changedView, visibility);
+        if (visibility == VISIBLE) resumeAnimator();
+        else pauseAnimator();
+    }
+
+    private void resumeAnimator() {
+        if (phaseAnimator != null && !phaseAnimator.isRunning()) phaseAnimator.start();
+    }
+
+    private void pauseAnimator() {
+        if (phaseAnimator != null && phaseAnimator.isRunning()) phaseAnimator.cancel();
+    }
+
+    // ── 公开接口 ──────────────────────────────────────────────────────────────
+
+    /** 设置麦克风输入振幅（0.0~1.0） */
     public void setAmplitude(float amplitude) {
         targetAmplitude = amplitude * getHeight() * ACTIVE_AMP_FRAC;
     }
 
-    /**
-     * 设置 AI 播放输出振幅（RMS 0.0~1.0），供 onBinaryMessage 调用。
-     */
+    /** 设置 AI 播放输出振幅（RMS 0.0~1.0） */
     public void setPlayingAmplitude(float amplitude) {
         targetAmplitude = amplitude * getHeight() * ACTIVE_AMP_FRAC;
     }

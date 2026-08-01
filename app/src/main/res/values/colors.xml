@@ -33,6 +33,14 @@
     <color name="voice_card_bg">#0D1B2A</color>
     <color name="wave_color">#40C4FF</color>
 
+    <!-- Aurora Wave 渐变色（支持 values-night 独立覆盖，避免深色模式刺眼） -->
+    <color name="wave_l0_start">#00CFFF</color>
+    <color name="wave_l0_end">#0055FF</color>
+    <color name="wave_l1_start">#FF6EC7</color>
+    <color name="wave_l1_end">#A855F7</color>
+    <color name="wave_l2_start">#00FFA3</color>
+    <color name="wave_l2_end">#00D4FF</color>
+
     <!-- 输入框填充色（night 版本在 values-night/colors.xml 中覆盖） -->
     <color name="bg_input_field">#EFF2F5</color>
     <color name="bg_input">#F3F4F6</color>

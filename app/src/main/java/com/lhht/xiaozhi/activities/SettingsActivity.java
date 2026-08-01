@@ -142,8 +142,9 @@ public class SettingsActivity extends AppCompatActivity {
 
         String wsUrl = wsUrlInput.getText().toString().trim();
         String inputToken = tokenInput.getText().toString().trim();
-        // 如果用户没有修改 token（字段仍是脱敏格式或为空），保留原始 token
-        String token = (inputToken.isEmpty() || isMasked(inputToken)) ? actualToken : inputToken;
+        // Token 修改判断：与脱敏后的原始值完全相同，或为空，则视为未修改，保留原值
+        String token = (inputToken.isEmpty() || inputToken.equals(maskToken(actualToken)))
+                ? actualToken : inputToken;
         boolean enableToken = enableTokenSwitch.isChecked();
         settingsManager.saveSettings(wsUrl, token, enableToken);
 

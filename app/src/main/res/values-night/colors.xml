@@ -16,4 +16,12 @@
     <!-- 消息气泡 -->
     <color name="bubble_ai">#252830</color>
     <color name="bubble_ai_text">#DDE1EA</color>
+
+    <!-- Aurora Wave 暗色覆盖：低饱和度，避免纯黑背景下刺眼 -->
+    <color name="wave_l0_start">#1A5C8C</color>
+    <color name="wave_l0_end">#0D2E6E</color>
+    <color name="wave_l1_start">#7A2A5C</color>
+    <color name="wave_l1_end">#42166A</color>
+    <color name="wave_l2_start">#0A5A3A</color>
+    <color name="wave_l2_end">#0A3A5A</color>
 </resources>

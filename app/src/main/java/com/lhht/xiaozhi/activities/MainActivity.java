@@ -1,7 +1,9 @@
 package com.lhht.xiaozhi.activities;
 
 import android.Manifest;
+import android.animation.ObjectAnimator;
 import android.content.Intent;
+import android.view.HapticFeedbackConstants;
 import android.content.pm.PackageManager;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
@@ -13,6 +15,7 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
+import android.view.ViewPropertyAnimator;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -93,6 +96,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     private View guideCard; // 操作引导卡片
     private FloatingActionButton voiceButton; // 语音通话按钮
     private TextView voiceHintText; // 通话按钮下方说明文字
+    private View messageBadge; // 折叠态新消息红点
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -123,9 +127,12 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                     v.requestLayout();
                 }
             });
+        // 禁用 RecyclerView 嵌套滚动，避免与外层 NestedScrollView 冲突（V3-4）
+        messagesRecyclerView.setNestedScrollingEnabled(false);
 
-        // 消息历史折叠/展开
-        messageHeaderLayout.setOnClickListener(v -> toggleMessageExpansion());
+        // 消息历史折叠/展开（手表布局无此控件，判空兜底）
+        if (messageHeaderLayout != null)
+            messageHeaderLayout.setOnClickListener(v -> toggleMessageExpansion());
         
         Log.i("MainActivity", "应用启动");
 
@@ -190,11 +197,20 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         // 绑定新布局按钮
         voiceButton = findViewById(R.id.voiceButton);
         voiceHintText = findViewById(R.id.voiceHintText);
+        messageBadge = findViewById(R.id.messageBadge);
         ImageButton settingsButton = findViewById(R.id.settingsButton);
 
         // 设置按钮点击事件
         if (connectButton != null) connectButton.setOnClickListener(v -> toggleConnection());
-        if (voiceButton != null) voiceButton.setOnClickListener(v -> toggleRecording());
+        if (voiceButton != null) {
+            voiceButton.setOnClickListener(v -> toggleRecording());
+            // 长按 FAB 进入设置（手表端无顶部设置按钮时的唯一入口）
+            voiceButton.setOnLongClickListener(v -> {
+                v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                openSettings();
+                return true;
+            });
+        }
         if (sendButton != null) sendButton.setOnClickListener(v -> sendMessage());
         if (settingsButton != null) settingsButton.setOnClickListener(v -> openSettings());
 
@@ -216,11 +232,31 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
     private void toggleMessageExpansion() {
         isMessageExpanded = !isMessageExpanded;
-        messageContentLayout.setVisibility(isMessageExpanded ? View.VISIBLE : View.GONE);
-        // 旋转展开图标
-        messageExpandIcon.animate()
+        if (messageContentLayout != null)
+            messageContentLayout.setVisibility(isMessageExpanded ? View.VISIBLE : View.GONE);
+        // 展开时隐藏红点（V3-3）
+        if (isMessageExpanded && messageBadge != null)
+            messageBadge.setVisibility(View.GONE);
+        if (messageExpandIcon == null) return;
+        ViewPropertyAnimator anim = messageExpandIcon.animate()
                 .rotation(isMessageExpanded ? 180 : 0)
-                .setDuration(200)
+                .setDuration(200);
+        if (isMessageExpanded) {
+            anim.withEndAction(() -> {
+                if (messagesRecyclerView == null) return;
+                int last = messageAdapter.getItemCount() - 1;
+                if (last >= 0) messagesRecyclerView.smoothScrollToPosition(last);
+            });
+        }
+        anim.start();
+    }
+
+    /** 标题栏左右抖动，提示有新消息（V3-3） */
+    private void shakeMessageHeader() {
+        if (messageHeaderLayout == null) return;
+        ObjectAnimator.ofFloat(messageHeaderLayout, "translationX",
+                        0f, -8f, 8f, -6f, 6f, -4f, 4f, 0f)
+                .setDuration(400)
                 .start();
     }
 
@@ -284,6 +320,9 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                         OtaService.stopPolling();  // 停止后台轮询
                         dialog.dismiss();
                         bindingDialog = null;
+                        // R-2: 确保连接按钮恢复可用，防止状态机卡死
+                        connectButton.setEnabled(true);
+                        connectButton.setText(R.string.connect);
                         connectionStatus.setText(getString(R.string.status_disconnected));
                         updateStatusDot(R.color.status_disconnected);
                         Toast.makeText(MainActivity.this, "已取消绑定", Toast.LENGTH_SHORT).show();
@@ -361,13 +400,18 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
         isRecording = true;
         runOnUiThread(() -> {
-            voiceContainer.setVisibility(View.VISIBLE);
-            callStatusText.setVisibility(View.VISIBLE);
-            callStatusText.setText(R.string.calling);
+            if (voiceContainer != null) voiceContainer.setVisibility(View.VISIBLE);
+            if (callStatusText != null) {
+                callStatusText.setVisibility(View.VISIBLE);
+                callStatusText.setText(R.string.calling);
+            }
             // 通话中：深蓝色 + 停止图标 + 文案更新
-            voiceButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
-                ContextCompat.getColor(this, R.color.primary_dark)));
-            voiceButton.setImageResource(R.drawable.ic_stop);
+            if (voiceButton != null) {
+                voiceButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                    ContextCompat.getColor(this, R.color.primary_dark)));
+                voiceButton.setImageResource(R.drawable.ic_stop);
+                voiceButton.setContentDescription("结束通话"); // R-4
+            }
             if (voiceHintText != null) voiceHintText.setText("点击结束通话");
         });
         
@@ -386,7 +430,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                         amplitude = Math.max(amplitude, Math.abs(buffer[i]) / 32768.0f);
                     }
                     final float finalAmplitude = amplitude;
-                    runOnUiThread(() -> waveformView.setAmplitude(finalAmplitude));
+                    runOnUiThread(() -> { if (waveformView != null) waveformView.setAmplitude(finalAmplitude); });
                     
                     // 检测静音
                     boolean isSilent = amplitude < 0.02f; // 2%的阈值
@@ -430,7 +474,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                             System.arraycopy(encodedBuffer, 0, silenceData, 0, silenceBytes);
                             webSocketManager.sendBinaryMessage(silenceData);
                         }
-                        runOnUiThread(() -> waveformView.setAmplitude(0));
+                        runOnUiThread(() -> { if (waveformView != null) waveformView.setAmplitude(0); });
                     }
                 }
             }
@@ -441,13 +485,16 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         isRecording = false;
         isPlaying = false; // 重置播放状态，防止下次通话被屏蔽
         runOnUiThread(() -> {
-            voiceContainer.setVisibility(View.GONE);
-            callStatusText.setVisibility(View.GONE);
-            waveformView.setAmplitude(0);
+            if (voiceContainer != null) voiceContainer.setVisibility(View.GONE);
+            if (callStatusText != null) callStatusText.setVisibility(View.GONE);
+            if (waveformView != null) waveformView.setAmplitude(0);
             // 恢复待机态：亮蓝色 + 麦克风图标 + 文案恢复
-            voiceButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
-                ContextCompat.getColor(this, R.color.primary)));
-            voiceButton.setImageResource(R.drawable.ic_mic);
+            if (voiceButton != null) {
+                voiceButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                    ContextCompat.getColor(this, R.color.primary)));
+                voiceButton.setImageResource(R.drawable.ic_mic);
+                voiceButton.setContentDescription("开始聊天"); // R-4
+            }
             if (voiceHintText != null) voiceHintText.setText("点击开始聊天");
         });
 
@@ -471,6 +518,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     }
 
     private void sendMessage() {
+        if (messageInput == null) return; // 手表布局无输入框，直接返回
         String message = messageInput.getText().toString().trim();
         if (message.isEmpty()) return;
         if (!webSocketManager.isConnected()) {
@@ -659,22 +707,29 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             if ("tts".equals(type) && "sentence_start".equals(state) && jsonMessage.has("text")) {
                 String text = jsonMessage.getString("text");
                 runOnUiThread(() -> {
-                    // 首条消息时自动展开消息区
                     if (!isMessageExpanded && messageAdapter.getItemCount() == 0) {
-                        toggleMessageExpansion();
+                        toggleMessageExpansion(); // 首条消息：自动展开
+                    } else if (!isMessageExpanded) {
+                        // 后续消息且消息区折叠：显示红点 + 标题抖动（V3-3）
+                        if (messageBadge != null) messageBadge.setVisibility(View.VISIBLE);
+                        shakeMessageHeader();
                     }
                     messageAdapter.addMessage(new Message(text, true));
-                    messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);
+                    if (messagesRecyclerView != null)
+                        messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);
                 });
             } else if ("stt".equals(type) && jsonMessage.has("text")) {
                 String text = jsonMessage.getString("text");
                 runOnUiThread(() -> {
-                    // 首条消息时自动展开消息区
                     if (!isMessageExpanded && messageAdapter.getItemCount() == 0) {
-                        toggleMessageExpansion();
+                        toggleMessageExpansion(); // 首条消息：自动展开
+                    } else if (!isMessageExpanded) {
+                        if (messageBadge != null) messageBadge.setVisibility(View.VISIBLE);
+                        shakeMessageHeader();
                     }
-                    messageAdapter.addMessage(new Message(text, false)); // 用户的话
-                    messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);
+                    messageAdapter.addMessage(new Message(text, false));
+                    if (messagesRecyclerView != null)
+                        messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);
                 });
             }
         } catch (JSONException e) {
@@ -724,7 +779,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                 long sumSq = 0;
                 for (int i = 0; i < decodedSamples; i++) sumSq += (long) decodedBuffer[i] * decodedBuffer[i];
                 float rms = (float) Math.sqrt((double) sumSq / decodedSamples) / 32768f;
-                runOnUiThread(() -> waveformView.setPlayingAmplitude(rms));
+                runOnUiThread(() -> { if (waveformView != null) waveformView.setPlayingAmplitude(rms); });
 
                 // 将 short[] 转换为 byte[]
                 byte[] pcmData = new byte[decodedSamples * 2];
