@@ -22,12 +22,10 @@ import com.lhht.xiaozhi.R;
 /**
  * Aurora Wave View - Siri 极光风格多层波纹动画。
  *
- * 颜色来源：wave_l0_start/end、wave_l1_start/end、wave_l2_start/end
- *   在 values/colors.xml 中定义亮色极光，values-night/colors.xml 中定义低饱和暗色。
- *
  * 渲染策略（按 API 自动切换）：
- *   API 26+：硬件加速 + canvas.saveLayer + PorterDuff.SCREEN（完整极光效果）
- *   API 21-25：直接叠绘，颜色统一为 primary 主色不同 alpha，色彩纯净无脏色
+ *   API 26+：硬件加速 + canvas.saveLayer + PorterDuff.SCREEN，颜色从资源读取（支持深色模式覆盖）
+ *   API 21-25 降级：底层 FILL（alpha 0x22 基底）+ 中层/顶层 STROKE（精细线条交错），
+ *                   统一使用 primary 蓝，避免多色叠加产生脏色，同时保留流动感。
  *
  * 动画生命周期：onVisibilityChanged / onDetachedFromWindow 感知，GONE 时暂停节省资源。
  */
@@ -43,10 +41,9 @@ public class WaveformView extends View {
     private static final float LERP_FACTOR     = 0.12f;
     private static final float WAVE_FREQ       = 1.4f;
 
-    /** API 26+ 使用 SCREEN 混合，低端机退为半透明叠绘 */
     private final boolean useScreenBlend = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O;
 
-    /** 每层渐变色 [start, end]，在 init() 中根据模式从资源解析 */
+    /** 每层渐变色 [start, end]，在 init() 中从资源或主色计算 */
     private final int[][] resolvedColors = new int[LAYER_COUNT][2];
 
     private final Paint[] layerPaints = new Paint[LAYER_COUNT];
@@ -68,33 +65,52 @@ public class WaveformView extends View {
     }
 
     private void init() {
+        float density = getContext().getResources().getDisplayMetrics().density;
+
         if (useScreenBlend) {
+            // ── 高端机（API 26+）：SCREEN 混合，颜色从资源读取支持深色模式 ────────
             setLayerType(LAYER_TYPE_HARDWARE, null);
-            // 高端机：从资源读取极光色，支持 values-night 深色覆盖
             resolvedColors[0][0] = ContextCompat.getColor(getContext(), R.color.wave_l0_start);
             resolvedColors[0][1] = ContextCompat.getColor(getContext(), R.color.wave_l0_end);
             resolvedColors[1][0] = ContextCompat.getColor(getContext(), R.color.wave_l1_start);
             resolvedColors[1][1] = ContextCompat.getColor(getContext(), R.color.wave_l1_end);
             resolvedColors[2][0] = ContextCompat.getColor(getContext(), R.color.wave_l2_start);
             resolvedColors[2][1] = ContextCompat.getColor(getContext(), R.color.wave_l2_end);
+
+            PorterDuffXfermode screenXfer = new PorterDuffXfermode(PorterDuff.Mode.SCREEN);
+            for (int i = 0; i < LAYER_COUNT; i++) {
+                Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+                p.setStyle(Paint.Style.FILL);
+                if (i > 0) p.setXfermode(screenXfer);
+                layerPaints[i] = p;
+            }
         } else {
-            // 低端机降级：统一使用 primary 蓝，三层只区分 alpha，不混色，不出脏色
+            // ── 低端机（API 21-25）：FILL 基底 + STROKE 精细线条，无多色叠加 ───────
             int base = ContextCompat.getColor(getContext(), R.color.primary);
             int r = Color.red(base), g = Color.green(base), b = Color.blue(base);
-            int c0 = Color.argb(0xCC, r, g, b); // 80% 不透明
-            int c1 = Color.argb(0x80, r, g, b); // 50% 不透明
-            int c2 = Color.argb(0x4D, r, g, b); // 30% 不透明
-            resolvedColors[0] = new int[]{c0, c0};
-            resolvedColors[1] = new int[]{c1, c1};
-            resolvedColors[2] = new int[]{c2, c2};
-        }
 
-        PorterDuffXfermode screenXfer = new PorterDuffXfermode(PorterDuff.Mode.SCREEN);
-        for (int i = 0; i < LAYER_COUNT; i++) {
-            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-            p.setStyle(Paint.Style.FILL);
-            if (useScreenBlend && i > 0) p.setXfermode(screenXfer);
-            layerPaints[i] = p;
+            // 底层：极低 alpha 的填充面，只为提供轮廓感
+            int cFill = Color.argb(0x22, r, g, b);
+            resolvedColors[0] = new int[]{cFill, cFill};
+            Paint p0 = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p0.setStyle(Paint.Style.FILL);
+            layerPaints[0] = p0;
+
+            // 中层：中等 alpha 的细描边线
+            int cMid = Color.argb(0x80, r, g, b);
+            resolvedColors[1] = new int[]{cMid, cMid};
+            Paint p1 = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p1.setStyle(Paint.Style.STROKE);
+            p1.setStrokeWidth(1.5f * density);
+            layerPaints[1] = p1;
+
+            // 顶层：高 alpha 的粗描边线（主波形轮廓）
+            int cTop = Color.argb(0xEE, r, g, b);
+            resolvedColors[2] = new int[]{cTop, cTop};
+            Paint p2 = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p2.setStyle(Paint.Style.STROKE);
+            p2.setStrokeWidth(2.5f * density);
+            layerPaints[2] = p2;
         }
 
         phaseAnimator = ValueAnimator.ofFloat(0f, (float) (2 * Math.PI));
@@ -113,7 +129,6 @@ public class WaveformView extends View {
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
         if (w == 0 || h == 0) return;
-        // 将解析好的颜色绑定到各层渐变 shader
         for (int i = 0; i < LAYER_COUNT; i++) {
             layerPaints[i].setShader(new LinearGradient(
                     0, h * 0.5f, w, h * 0.5f,
@@ -145,18 +160,36 @@ public class WaveformView extends View {
         for (int i = 0; i < LAYER_COUNT; i++) {
             float phaseShift = globalPhase * SPEED_MULTS[i] + PHASE_OFFSETS[i];
             float layerAmp   = totalAmp * AMP_MULTS[i];
+            boolean isStroke = layerPaints[i].getStyle() == Paint.Style.STROKE;
+
             wavePath.reset();
-            wavePath.moveTo(0, h);
-            for (int x = 0; x <= w; x += 3) {
-                float t          = (float) x / w;
-                float nt         = 2f * t - 1f;
-                float edgeFactor = 1f - nt * nt;
-                float y = centerY - layerAmp * edgeFactor
-                        * (float) Math.sin(2 * Math.PI * t * WAVE_FREQ + phaseShift);
-                wavePath.lineTo(x, y);
+            if (isStroke) {
+                // STROKE：只画波浪线，不需要封底，避免轮廓矩形
+                float y0 = centerY - layerAmp
+                        * (float) Math.sin(2 * Math.PI * 0f * WAVE_FREQ + phaseShift);
+                wavePath.moveTo(0, y0);
+                for (int x = 3; x <= w; x += 3) {
+                    float t          = (float) x / w;
+                    float nt         = 2f * t - 1f;
+                    float edgeFactor = 1f - nt * nt;
+                    float y = centerY - layerAmp * edgeFactor
+                            * (float) Math.sin(2 * Math.PI * t * WAVE_FREQ + phaseShift);
+                    wavePath.lineTo(x, y);
+                }
+            } else {
+                // FILL：波形曲线 + 封底，形成填充区域
+                wavePath.moveTo(0, h);
+                for (int x = 0; x <= w; x += 3) {
+                    float t          = (float) x / w;
+                    float nt         = 2f * t - 1f;
+                    float edgeFactor = 1f - nt * nt;
+                    float y = centerY - layerAmp * edgeFactor
+                            * (float) Math.sin(2 * Math.PI * t * WAVE_FREQ + phaseShift);
+                    wavePath.lineTo(x, y);
+                }
+                wavePath.lineTo(w, h);
+                wavePath.close();
             }
-            wavePath.lineTo(w, h);
-            wavePath.close();
             canvas.drawPath(wavePath, layerPaints[i]);
         }
     }

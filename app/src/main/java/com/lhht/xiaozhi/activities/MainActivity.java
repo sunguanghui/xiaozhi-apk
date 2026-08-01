@@ -97,6 +97,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     private FloatingActionButton voiceButton; // 语音通话按钮
     private TextView voiceHintText; // 通话按钮下方说明文字
     private View messageBadge; // 折叠态新消息红点
+    private ObjectAnimator shakeAnimator; // 标题栏抖动动画（节流复用）
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -205,7 +206,9 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         if (voiceButton != null) {
             voiceButton.setOnClickListener(v -> toggleRecording());
             // 长按 FAB 进入设置（手表端无顶部设置按钮时的唯一入口）
+            // 通话中忽略长按，防止按住说话时误触跳转（Task 2）
             voiceButton.setOnLongClickListener(v -> {
+                if (isRecording) return false;
                 v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                 openSettings();
                 return true;
@@ -251,13 +254,14 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         anim.start();
     }
 
-    /** 标题栏左右抖动，提示有新消息（V3-3） */
+    /** 标题栏左右抖动，提示有新消息（V3-3）。节流：动画进行中不重复启动。 */
     private void shakeMessageHeader() {
         if (messageHeaderLayout == null) return;
-        ObjectAnimator.ofFloat(messageHeaderLayout, "translationX",
-                        0f, -8f, 8f, -6f, 6f, -4f, 4f, 0f)
-                .setDuration(400)
-                .start();
+        if (shakeAnimator != null && shakeAnimator.isRunning()) return; // 节流：正在抖动则跳过
+        shakeAnimator = ObjectAnimator.ofFloat(messageHeaderLayout, "translationX",
+                0f, -8f, 8f, -6f, 6f, -4f, 4f, 0f);
+        shakeAnimator.setDuration(400);
+        shakeAnimator.start();
     }
 
     private void checkPermissions() {
