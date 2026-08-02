@@ -29,6 +29,7 @@ import android.widget.Toast;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.lhht.xiaozhi.utils.OtaService;
+import com.lhht.xiaozhi.utils.LogUtils;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
