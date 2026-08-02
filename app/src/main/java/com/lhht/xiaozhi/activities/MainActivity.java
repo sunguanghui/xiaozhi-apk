@@ -685,7 +685,9 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
             if ("tts".equals(type)) {
                 if ("start".equals(state) || "sentence_start".equals(state)) {
+                    firstAudioDataReceived = false;  // 重置标志
                     addLog("Audio", "准备播放音频");
+                    addLog("Timing", "🔊 收到音频开始信号，设置 isPlaying=true");
                     // 开始播放音频
                     isPlaying = true;
                     audioExecutor.execute(() -> {
@@ -693,6 +695,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                             try {
                                 if (audioTrack.getState() != AudioTrack.STATE_INITIALIZED) {
                                     addLog("Audio", "重新初始化AudioTrack");
+                                    addLog("Timing", "🔊 AudioTrack 未初始化，开始重新初始化");
                                     // 重新初始化AudioTrack
                                     int minBufferSize = AudioTrack.getMinBufferSize(
                                         SAMPLE_RATE,
@@ -712,11 +715,13 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                                         .setBufferSizeInBytes(minBufferSize * 2)  // 减小缓冲区降低延迟
                                         .setTransferMode(AudioTrack.MODE_STREAM)
                                         .build();
+                                    addLog("Timing", "🔊 AudioTrack 初始化完成");
                                 }
-                                
+
                                 if (audioTrack.getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
                                     audioTrack.play();
                                     addLog("Audio", "AudioTrack开始播放");
+                                    addLog("Timing", "🔊 AudioTrack.play() 已调用，等待音频数据");
                                 }
                             } catch (Exception e) {
                                 addLog("Audio", "AudioTrack初始化/播放失败: " + e.getMessage());
@@ -756,7 +761,9 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             // - llm / 其他       → 只含 emotion/emoji，不加入聊天气泡
             if ("tts".equals(type) && "sentence_start".equals(state) && jsonMessage.has("text")) {
                 String text = jsonMessage.getString("text");
+                addLog("Timing", "📝 收到 tts.sentence_start，准备显示文字");
                 runOnUiThread(() -> {
+                    addLog("Timing", "📝 文字已显示到界面: " + text.substring(0, Math.min(20, text.length())) + "...");
                     if (!isMessageExpanded && messageAdapter.getItemCount() == 0) {
                         toggleMessageExpansion(); // 首条消息：自动展开
                     } else if (!isMessageExpanded) {
@@ -787,13 +794,21 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         }
     }
 
+    private volatile boolean firstAudioDataReceived = false;
+
     @Override
     public void onBinaryMessage(byte[] data) {
         Log.i("XiaoZhi-Audio", String.format("收到音频数据: %d 字节, isPlaying=%b", data.length, isPlaying));
-        
+
         if (!isPlaying) {
             Log.i("XiaoZhi-Audio", "当前不在接收状态，忽略音频数据");
             return;
+        }
+
+        // 记录首次收到音频数据的时间
+        if (!firstAudioDataReceived) {
+            firstAudioDataReceived = true;
+            addLog("Timing", "🎵 首次收到音频数据 (" + data.length + " 字节)");
         }
 
         // 复制数据，避免被修改
@@ -879,7 +894,9 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     }
 
     private void addLog(String tag, String message) {
-        Log.i("XiaoZhi-" + tag, message);
+        String fullTag = "XiaoZhi-" + tag;
+        Log.i(fullTag, message);
+        LogUtils.getInstance().d(this, fullTag, message);
     }
 
     /**
