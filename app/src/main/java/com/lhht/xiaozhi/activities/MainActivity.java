@@ -560,9 +560,8 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                 jsonMessage.put("source", "text");
                 if (!sessionId.isEmpty()) jsonMessage.put("session_id", sessionId);
                 webSocketManager.sendMessage(jsonMessage.toString());
-                messageAdapter.addMessage(new Message(message, false));  // 添加用户消息
+                // 不立即添加消息，等待服务器 stt 回显以避免重复
                 messageInput.setText("");
-                messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);  // 滚动到底部
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -770,11 +769,6 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                         messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);
                 });
             } else if ("stt".equals(type) && jsonMessage.has("text")) {
-                // 跳过来自文字输入的 stt 回显（已在 sendMessage 中本地添加）
-                String source = jsonMessage.optString("source", "");
-                if ("text".equals(source)) {
-                    return; // 文字输入的回显不重复显示
-                }
                 String text = jsonMessage.getString("text");
                 runOnUiThread(() -> {
                     if (!isMessageExpanded && messageAdapter.getItemCount() == 0) {
