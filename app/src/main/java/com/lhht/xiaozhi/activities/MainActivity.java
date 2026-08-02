@@ -770,6 +770,11 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                         messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);
                 });
             } else if ("stt".equals(type) && jsonMessage.has("text")) {
+                // 跳过来自文字输入的 stt 回显（已在 sendMessage 中本地添加）
+                String source = jsonMessage.optString("source", "");
+                if ("text".equals(source)) {
+                    return; // 文字输入的回显不重复显示
+                }
                 String text = jsonMessage.getString("text");
                 runOnUiThread(() -> {
                     if (!isMessageExpanded && messageAdapter.getItemCount() == 0) {
