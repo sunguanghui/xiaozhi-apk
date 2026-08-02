@@ -714,10 +714,11 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                                             .setSampleRate(SAMPLE_RATE)
                                             .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                                             .build())
-                                        .setBufferSizeInBytes(minBufferSize * 2)  // 减小缓冲区降低延迟
+                                        .setBufferSizeInBytes(minBufferSize)  // 使用最小缓冲区
                                         .setTransferMode(AudioTrack.MODE_STREAM)
+                                        .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)  // 低延迟模式
                                         .build();
-                                    addLog("Timing", "🔊 AudioTrack 初始化完成");
+                                    addLog("Timing", "🔊 AudioTrack 初始化完成（低延迟模式）");
                                 }
 
                                 if (audioTrack.getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
