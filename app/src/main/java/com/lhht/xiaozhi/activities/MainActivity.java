@@ -709,7 +709,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                                             .setSampleRate(SAMPLE_RATE)
                                             .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                                             .build())
-                                        .setBufferSizeInBytes(Math.max(minBufferSize * 8, 32768))
+                                        .setBufferSizeInBytes(minBufferSize * 2)  // 减小缓冲区降低延迟
                                         .setTransferMode(AudioTrack.MODE_STREAM)
                                         .build();
                                 }
