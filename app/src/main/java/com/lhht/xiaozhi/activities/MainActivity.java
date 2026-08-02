@@ -687,6 +687,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             if ("tts".equals(type)) {
                 if ("start".equals(state) || "sentence_start".equals(state)) {
                     firstAudioDataReceived = false;  // 重置标志
+                    firstAudioWritten = false;  // 重置标志
                     addLog("Audio", "准备播放音频");
                     addLog("Timing", "🔊 收到音频开始信号，设置 isPlaying=true");
                     // 开始播放音频
@@ -796,6 +797,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     }
 
     private volatile boolean firstAudioDataReceived = false;
+    private volatile boolean firstAudioWritten = false;
 
     @Override
     public void onBinaryMessage(byte[] data) {
@@ -814,7 +816,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
 
         // 复制数据，避免被修改
         final byte[] audioData = data.clone();
-        
+
         // 在主线程中检查状态
         if (audioTrack == null || audioTrack.getState() != AudioTrack.STATE_INITIALIZED) {
             Log.e("XiaoZhi-Audio", "错误: AudioTrack未初始化或状态错误");
@@ -831,14 +833,19 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             try {
                 // 解码 Opus 数据
                 int decodedSamples = opusUtils.decode(decoderHandle, audioData, decodedBuffer);
-                
+
                 if (decodedSamples < 0) {
                     Log.e("XiaoZhi-Audio", String.format("Opus解码失败: %d", decodedSamples));
                     return;
                 }
-                
+
                 if (decodedSamples == 0) {
                     return;
+                }
+
+                // 首次解码成功的日志
+                if (!firstAudioDataReceived) {
+                    addLog("Timing", "🎵 首次 Opus 解码成功 (" + decodedSamples + " 采样)");
                 }
 
                 // 计算 RMS 振幅并驱动波形动画（AI 播放时）
@@ -864,9 +871,16 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
                         audioTrack.play();
                         Log.i("XiaoZhi-Audio", "重新开始播放");
                     }
-                    
+
                     int remaining = pcmData.length - written;
                     int result = audioTrack.write(pcmData, written, remaining, AudioTrack.WRITE_BLOCKING);
+
+                    // 首次成功写入的日志
+                    if (result > 0 && !firstAudioWritten) {
+                        firstAudioWritten = true;
+                        addLog("Timing", "🔈 首次写入 AudioTrack (" + result + " 字节)");
+                    }
+
                     if (result < 0) {
                         Log.e("XiaoZhi-Audio", String.format("写入音频数据失败: %d", result));
                         retryCount++;
