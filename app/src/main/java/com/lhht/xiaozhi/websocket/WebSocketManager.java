@@ -24,9 +24,18 @@ import java.security.cert.X509Certificate;
 
 public class WebSocketManager {
     private static final String TAG = "WebSocketManager";
-    private static final int RECONNECT_DELAY = 5000;
     // 300ms内且无任何服务端消息，才判定为格式/鉴权错误，停止重连
     private static final long AUTH_FAIL_THRESHOLD_MS = 300;
+    // 指数退避重连：每次失败延迟递增，封顶 30 秒（对齐 py-xiaozhi min(attempts*2, 30)s）
+    private static final long RECONNECT_BASE_DELAY_MS = 2000;
+    private static final long RECONNECT_MAX_DELAY_MS = 30000;
+    // 连续重连失败达到此次数后停止，避免无限空转耗电
+    private static final int MAX_RECONNECT_ATTEMPTS = 10;
+    // 连接健康检查：超过此时长未收到任何服务端消息，视为连接静默死亡，主动重连
+    private static final long HEALTH_CHECK_INTERVAL_MS = 15000;
+    private static final long HEALTH_CHECK_SILENCE_THRESHOLD_MS = 30000;
+    // WebSocket 库内置心跳超时（秒）：超时未收到 pong 主动断开，触发 onClose 走重连逻辑
+    private static final int CONNECTION_LOST_TIMEOUT_SEC = 30;
 
     private WebSocketClient client;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -42,6 +51,12 @@ public class WebSocketManager {
     private Runnable pendingReconnect;
     // 记录连接建立时间，用于检测鉴权失败（极短时间内关闭）
     private long connectOpenTime = 0;
+    // 连续重连失败次数，连接成功后清零
+    private int reconnectAttempts = 0;
+    // 最近一次收到服务端任意消息（文本/二进制）的时间，用于健康检查
+    private volatile long lastMessageTime = 0;
+    private final Runnable healthCheckRunnable = this::checkConnectionHealth;
+    private boolean healthCheckScheduled = false;
 
     public interface WebSocketListener {
         void onConnected();
@@ -97,6 +112,8 @@ public class WebSocketManager {
                 @Override
                 public void onOpen(ServerHandshake handshakedata) {
                     connectOpenTime = System.currentTimeMillis();
+                    lastMessageTime = connectOpenTime;
+                    reconnectAttempts = 0; // 连接成功，重置重连计数
                     LogUtils.getInstance().d(context, TAG,
                             "WebSocket 已连接，HTTP状态: " + handshakedata.getHttpStatus());
                     // ★ 在 WebSocket 线程直接发 hello，不经 mainHandler
@@ -104,11 +121,13 @@ public class WebSocketManager {
                     sendHelloMessage();
                     mainHandler.post(() -> {
                         if (listener != null) listener.onConnected();
+                        scheduleHealthCheck();
                     });
                 }
 
                 @Override
                 public void onMessage(ByteBuffer bytes) {
+                    lastMessageTime = System.currentTimeMillis();
                     byte[] data = new byte[bytes.remaining()];
                     bytes.get(data);
                     mainHandler.post(() -> {
@@ -118,6 +137,7 @@ public class WebSocketManager {
 
                 @Override
                 public void onMessage(String message) {
+                    lastMessageTime = System.currentTimeMillis();
                     // 所有服务端文本消息写入日志文件，便于远程调试
                     LogUtils.getInstance().d(context, TAG, "收到文本消息: " + message);
                     mainHandler.post(() -> {
@@ -134,6 +154,7 @@ public class WebSocketManager {
                     LogUtils.getInstance().d(context, TAG, msg);
 
                     mainHandler.post(() -> {
+                        cancelHealthCheck();
                         if (listener != null) listener.onDisconnected();
 
                         // 检测连接建立后极短时间（<300ms）被服务端关闭：协议握手失败
@@ -156,11 +177,14 @@ public class WebSocketManager {
                     String errMsg = "WebSocket 错误: " + ex.getMessage();
                     LogUtils.getInstance().e(context, TAG, errMsg, ex);
                     mainHandler.post(() -> {
+                        cancelHealthCheck();
                         if (listener != null) listener.onError(ex.getMessage());
                         scheduleReconnect();
                     });
                 }
             };
+            // 启用库内置心跳，超时未收到 pong 视为连接丢失并触发 onClose（P1-5）
+            client.setConnectionLostTimeout(CONNECTION_LOST_TIMEOUT_SEC);
 
             // WSS：禁用证书验证（与 py-xiaozhi ssl._create_unverified_context() 一致）
             if ("wss".equalsIgnoreCase(uri.getScheme())) {
@@ -192,15 +216,27 @@ public class WebSocketManager {
         }
     }
 
-    /** 安全调度重连：取消已有定时器后重新排队，杜绝重连风暴 */
+    /**
+     * 安全调度重连：指数退避（2s, 4s, 8s... 封顶 30s），
+     * 连续失败达到 MAX_RECONNECT_ATTEMPTS 次后停止并通知 UI（P1-4）。
+     */
     private void scheduleReconnect() {
         cancelPendingReconnect();
-        LogUtils.getInstance().d(context, TAG, RECONNECT_DELAY / 1000 + "秒后尝试自动重连...");
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            String err = "已连续重连失败 " + reconnectAttempts + " 次，请检查网络或服务器地址后手动重试。";
+            LogUtils.getInstance().d(context, TAG, "达到最大重连次数，停止重连: " + err);
+            if (listener != null) listener.onError(err);
+            return;
+        }
+        reconnectAttempts++;
+        long delay = Math.min(RECONNECT_BASE_DELAY_MS * (1L << (reconnectAttempts - 1)), RECONNECT_MAX_DELAY_MS);
+        LogUtils.getInstance().d(context, TAG,
+                "第 " + reconnectAttempts + " 次重连，" + delay / 1000 + "秒后尝试...");
         pendingReconnect = () -> {
             pendingReconnect = null;
             connect(serverUrl, token, enableToken);
         };
-        mainHandler.postDelayed(pendingReconnect, RECONNECT_DELAY);
+        mainHandler.postDelayed(pendingReconnect, delay);
     }
 
     private void cancelPendingReconnect() {
@@ -210,10 +246,42 @@ public class WebSocketManager {
         }
     }
 
+    /**
+     * 连接健康主动探测（P1-5）：某些网络环境下 TCP 连接会静默死亡而不触发 onClose，
+     * 若超过 HEALTH_CHECK_SILENCE_THRESHOLD_MS 未收到任何服务端消息，主动断开重连。
+     */
+    private void checkConnectionHealth() {
+        if (client == null || !client.isOpen()) {
+            healthCheckScheduled = false;
+            return;
+        }
+        long silence = System.currentTimeMillis() - lastMessageTime;
+        if (silence > HEALTH_CHECK_SILENCE_THRESHOLD_MS) {
+            LogUtils.getInstance().d(context, TAG,
+                    "连接静默 " + silence + "ms 无响应，判定连接已死，主动重连");
+            healthCheckScheduled = false;
+            client.close();
+            return;
+        }
+        mainHandler.postDelayed(healthCheckRunnable, HEALTH_CHECK_INTERVAL_MS);
+    }
+
+    private void scheduleHealthCheck() {
+        if (healthCheckScheduled) return;
+        healthCheckScheduled = true;
+        mainHandler.postDelayed(healthCheckRunnable, HEALTH_CHECK_INTERVAL_MS);
+    }
+
+    private void cancelHealthCheck() {
+        healthCheckScheduled = false;
+        mainHandler.removeCallbacks(healthCheckRunnable);
+    }
+
     /** 绑定完成后重新鉴权 */
     public void reconnect() {
         LogUtils.getInstance().d(context, TAG, "主动调用 reconnect()");
         cancelPendingReconnect();
+        cancelHealthCheck();
         if (client != null && !client.isClosed()) {
             client.close();
         }
@@ -224,6 +292,7 @@ public class WebSocketManager {
     public void disconnect() {
         LogUtils.getInstance().d(context, TAG, "主动断开连接");
         cancelPendingReconnect();
+        cancelHealthCheck();
         if (client != null && client.isOpen()) {
             client.close();
         }

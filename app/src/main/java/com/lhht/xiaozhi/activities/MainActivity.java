@@ -6,14 +6,7 @@ import android.content.Intent;
 import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
 import android.content.pm.PackageManager;
-import android.media.AudioAttributes;
-import android.media.AudioFormat;
-import android.media.AudioManager;
-import android.media.AudioRecord;
-import android.media.AudioTrack;
-import android.media.MediaRecorder;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewPropertyAnimator;
@@ -45,48 +38,27 @@ import com.lhht.xiaozhi.models.Message;
 import com.lhht.xiaozhi.settings.SettingsManager;
 import com.lhht.xiaozhi.views.WaveformView;
 import com.lhht.xiaozhi.websocket.WebSocketManager;
-import com.lhht.xiaozhi.audio.OpusUtils;
+import com.lhht.xiaozhi.audio.AudioEngine;
 
 import org.json.JSONObject;
 import org.json.JSONException;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-public class MainActivity extends AppCompatActivity implements WebSocketManager.WebSocketListener {
+public class MainActivity extends AppCompatActivity
+        implements WebSocketManager.WebSocketListener, AudioEngine.Listener {
     private static final int PERMISSION_REQUEST_CODE = 1;
-    private static final int SAMPLE_RATE = 16000;
-    private static final int CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO;
-    private static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
-    private static final int BUFFER_SIZE = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT);
-    private static final int PLAY_BUFFER_SIZE = BUFFER_SIZE * 4;  // 播放缓冲区设置为录音缓冲区的4倍
-    private static final int OPUS_FRAME_SIZE = 960; // 60ms at 16kHz
 
     private WebSocketManager webSocketManager;
     private SettingsManager settingsManager;
+    private AudioEngine audioEngine;
     private TextView connectionStatus;
     private Button connectButton;
     private ImageButton sendButton;
     private EditText messageInput;
-    private AudioRecord audioRecord;
-    private AudioTrack audioTrack;
-    private boolean isRecording = false;
-    private ExecutorService executorService;
-    private boolean isPlaying = false;
-    private byte[] audioBuffer;
-    private OpusUtils opusUtils;
-    private long encoderHandle;
-    private long decoderHandle;
-    private short[] decodedBuffer;
-    private short[] recordBuffer;
     private TextView callStatusText;
     private WaveformView waveformView;
     private View voiceContainer;
     private View statusDot;
-    private ExecutorService audioExecutor;  // 音频处理线程池
     private String sessionId = ""; // 服务器 hello 里返回的 session_id
-    // TTS 停止后清空回声帧的截止时间（对齐 py-xiaozhi clear_audio_queue）
-    private volatile long flushUntilMs = 0;
     private MessageAdapter messageAdapter;
     private RecyclerView messagesRecyclerView;
     // 消息历史折叠/展开
@@ -136,8 +108,6 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         // 消息历史折叠/展开（手表布局无此控件，判空兜底）
         if (messageHeaderLayout != null)
             messageHeaderLayout.setOnClickListener(v -> toggleMessageExpansion());
-        
-        Log.i("MainActivity", "应用启动");
 
         // 初始化
         settingsManager = new SettingsManager(this);
@@ -147,49 +117,10 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         Log.i("MainActivity", "设备ID: " + deviceId + "  ClientId: " + clientId);
         webSocketManager = new WebSocketManager(this, deviceId, clientId);
         webSocketManager.setListener(this);
-        executorService = Executors.newSingleThreadExecutor();
-        audioExecutor = Executors.newSingleThreadExecutor();
 
-        // 初始化音频播放器
-        int minBufferSize = AudioTrack.getMinBufferSize(
-            SAMPLE_RATE,
-            AudioFormat.CHANNEL_OUT_MONO,
-            AUDIO_FORMAT
-        );
-        Log.i("MainActivity", "AudioTrack最小缓冲区: " + minBufferSize + " 字节");
-        
-        try {
-            audioTrack = new AudioTrack.Builder()
-                .setAudioAttributes(new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build())
-                .setAudioFormat(new AudioFormat.Builder()
-                    .setEncoding(AUDIO_FORMAT)
-                    .setSampleRate(SAMPLE_RATE)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                    .build())
-                .setBufferSizeInBytes(Math.max(minBufferSize * 8, 32768))  // 增大缓冲区
-                .setTransferMode(AudioTrack.MODE_STREAM)
-                .build();
-            
-            int state = audioTrack.getState();
-            if (state == AudioTrack.STATE_INITIALIZED) {
-                Log.i("MainActivity", "AudioTrack初始化成功");
-                audioTrack.play();
-            } else {
-                Log.e("MainActivity", "AudioTrack初始化失败: " + state);
-            }
-        } catch (Exception e) {
-            Log.e("MainActivity", "创建AudioTrack失败", e);
-        }
-
-        // 初始化 Opus 编解码器
-        opusUtils = OpusUtils.getInstance();
-        encoderHandle = opusUtils.createEncoder(SAMPLE_RATE, 1, 10);
-        decoderHandle = opusUtils.createDecoder(SAMPLE_RATE, 1);
-        decodedBuffer = new short[OPUS_FRAME_SIZE];
-        recordBuffer = new short[OPUS_FRAME_SIZE];
+        // 音频子系统：录音/播放/Opus 编解码/应用层播放缓冲，全部封装在 AudioEngine 里
+        audioEngine = new AudioEngine(this, this);
+        audioEngine.init();
 
         // 初始化视图
         connectionStatus = findViewById(R.id.connectionStatus);
@@ -210,7 +141,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             // 长按 FAB 进入设置（手表端无顶部设置按钮时的唯一入口）
             // 通话中忽略长按，防止按住说话时误触跳转（Task 2）
             voiceButton.setOnLongClickListener(v -> {
-                if (isRecording) return false;
+                if (audioEngine.isRecording()) return false;
                 v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                 openSettings();
                 return true;
@@ -383,7 +314,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
     }
 
     private void toggleRecording() {
-        if (!isRecording) {
+        if (!audioEngine.isRecording()) {
             startCall();
         } else {
             endCall();
@@ -411,16 +342,10 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             if (!sessionId.isEmpty()) startMessage.put("session_id", sessionId);
             webSocketManager.sendMessage(startMessage.toString());
         } catch (JSONException e) {
-            Log.e("XiaoZhi-Voice", "发送开始通话消息失败: " + e.getMessage());
+            LogUtils.getInstance().e(this, "XiaoZhi-Voice", "发送开始通话消息失败", e);
             return;
         }
 
-        if (audioRecord == null) {
-            audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC,
-                    SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, BUFFER_SIZE);
-        }
-
-        isRecording = true;
         runOnUiThread(() -> {
             if (voiceContainer != null) voiceContainer.setVisibility(View.VISIBLE);
             if (callStatusText != null) {
@@ -436,76 +361,12 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             }
             if (voiceHintText != null) voiceHintText.setText("点击结束通话");
         });
-        
-        executorService.execute(() -> {
-            audioRecord.startRecording();
-            short[] buffer = new short[OPUS_FRAME_SIZE]; // 960 samples
-            byte[] encodedBuffer = new byte[1024]; // Opus编码后的缓冲区
-            long lastAudioTime = System.currentTimeMillis();
-            
-            while (isRecording) {
-                int samplesRead = audioRecord.read(buffer, 0, OPUS_FRAME_SIZE);
-                if (samplesRead > 0) {
-                    // 检测音量并更新波形
-                    float amplitude = 0;
-                    for (int i = 0; i < samplesRead; i++) {
-                        amplitude = Math.max(amplitude, Math.abs(buffer[i]) / 32768.0f);
-                    }
-                    final float finalAmplitude = amplitude;
-                    runOnUiThread(() -> { if (waveformView != null) waveformView.setAmplitude(finalAmplitude); });
-                    
-                    // 检测静音
-                    boolean isSilent = amplitude < 0.02f; // 2%的阈值
-                    
-                    // 更新最后一次有声音的时间
-                    if (!isSilent) {
-                        lastAudioTime = System.currentTimeMillis();
-                    }
-                    
-                    // 编码为 Opus
-                    // 参考 xiaozhi-android-client audio_util.dart：
-                    // 当 samplesRead < 960 时补零，避免 Opus 编码器因帧不足而失败
-                    if (samplesRead < OPUS_FRAME_SIZE) {
-                        for (int i = samplesRead; i < OPUS_FRAME_SIZE; i++) {
-                            buffer[i] = 0;
-                        }
-                    }
-                    int encodedBytes = opusUtils.encode(encoderHandle, buffer, 0, encodedBuffer);
-                    if (encodedBytes > 0) {
-                        long now = System.currentTimeMillis();
-                        // isPlaying=true：AI 正在说话，跳过发送（防止实时回声）
-                        // flushUntilMs：AudioTrack 刚排空，清空 AudioRecord 里积压的回声帧
-                        // 对齐 py-xiaozhi clear_audio_queue / xiaozhi-android waitForPlaybackCompletion
-                        if (!isPlaying && now >= flushUntilMs) {
-                            byte[] encodedData = new byte[encodedBytes];
-                            System.arraycopy(encodedBuffer, 0, encodedData, 0, encodedBytes);
-                            webSocketManager.sendBinaryMessage(encodedData);
-                        }
-                    } else {
-                        Log.e("XiaoZhi-Voice", "Opus编码失败: " + encodedBytes);
-                    }
 
-                    // 静音超时：只在非播放且缓冲已清空时发送静音帧
-                    if (!isPlaying && System.currentTimeMillis() >= flushUntilMs
-                            && System.currentTimeMillis() - lastAudioTime > 1000) {
-                        // 发送静音帧
-                        short[] silenceFrame = new short[OPUS_FRAME_SIZE];
-                        int silenceBytes = opusUtils.encode(encoderHandle, silenceFrame, 0, encodedBuffer);
-                        if (silenceBytes > 0) {
-                            byte[] silenceData = new byte[silenceBytes];
-                            System.arraycopy(encodedBuffer, 0, silenceData, 0, silenceBytes);
-                            webSocketManager.sendBinaryMessage(silenceData);
-                        }
-                        runOnUiThread(() -> { if (waveformView != null) waveformView.setAmplitude(0); });
-                    }
-                }
-            }
-        });
+        audioEngine.startRecording();
     }
 
     private void endCall() {
-        isRecording = false;
-        isPlaying = false; // 重置播放状态，防止下次通话被屏蔽
+        audioEngine.stopRecording();
         runOnUiThread(() -> {
             if (voiceContainer != null) voiceContainer.setVisibility(View.GONE);
             if (callStatusText != null) callStatusText.setVisibility(View.GONE);
@@ -520,13 +381,6 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             if (voiceHintText != null) voiceHintText.setText("点击开始聊天");
         });
 
-        // 释放 AudioRecord，下次通话重新创建，避免复用已停止的实例导致第二次通话失效
-        if (audioRecord != null) {
-            audioRecord.stop();
-            audioRecord.release();
-            audioRecord = null;
-        }
-
         // 发送停止通话消息
         try {
             JSONObject stopMessage = new JSONObject();
@@ -535,7 +389,7 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             if (!sessionId.isEmpty()) stopMessage.put("session_id", sessionId);
             webSocketManager.sendMessage(stopMessage.toString());
         } catch (JSONException e) {
-            Log.e("XiaoZhi-Voice", "发送停止通话消息失败: " + e.getMessage());
+            LogUtils.getInstance().e(this, "XiaoZhi-Voice", "发送停止通话消息失败", e);
         }
     }
 
@@ -554,18 +408,18 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
             return;
         }
         try {
-                JSONObject jsonMessage = new JSONObject();
-                jsonMessage.put("type", "listen");
-                jsonMessage.put("state", "detect");
-                jsonMessage.put("text", message);
-                jsonMessage.put("source", "text");
-                if (!sessionId.isEmpty()) jsonMessage.put("session_id", sessionId);
-                webSocketManager.sendMessage(jsonMessage.toString());
-                // 不立即添加消息，等待服务器 stt 回显以避免重复
-                messageInput.setText("");
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            JSONObject jsonMessage = new JSONObject();
+            jsonMessage.put("type", "listen");
+            jsonMessage.put("state", "detect");
+            jsonMessage.put("text", message);
+            jsonMessage.put("source", "text");
+            if (!sessionId.isEmpty()) jsonMessage.put("session_id", sessionId);
+            webSocketManager.sendMessage(jsonMessage.toString());
+            // 不立即添加消息，等待服务器 stt 回显以避免重复
+            messageInput.setText("");
+        } catch (Exception e) {
+            LogUtils.getInstance().e(this, "XiaoZhi-Text", "发送文字消息失败", e);
+        }
     }
 
     private void openSettings() {
@@ -648,256 +502,146 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         }
     }
 
+    // ── 服务端消息分发（P2-8）：按 type 拆到独立 handler，不再是一长串 if/else ──
+
     @Override
     public void onMessage(String message) {
         addLog("Message", message);
         try {
             JSONObject jsonMessage = new JSONObject(message);
             String type = jsonMessage.getString("type");
-            String state = jsonMessage.optString("state");
-            
-            // 服务器 hello 消息：保存 session_id，后续所有消息都需要携带
-            if ("hello".equals(type)) {
-                String sid = jsonMessage.optString("session_id", "");
-                if (!sid.isEmpty()) {
-                    sessionId = sid;
-                    Log.i("XiaoZhi", "已收到 session_id: " + sessionId);
-                }
-                return;
-            }
-
-            if ("bind".equals(type)) {
-                // 官方平台返回绑定验证码，弹出引导弹窗
-                String code = jsonMessage.optString("code", "");
-                String msg = getString(R.string.bind_dialog_message, code);
-                runOnUiThread(() ->
-                    new MaterialAlertDialogBuilder(this)
-                        .setTitle(R.string.bind_dialog_title)
-                        .setMessage(msg)
-                        .setCancelable(false)
-                        .setPositiveButton(R.string.bind_dialog_confirm, (dialog, which) -> {
-                            dialog.dismiss();
-                            webSocketManager.reconnect();
-                        })
-                        .show()
-                );
-                return;
-            }
-
-            if ("tts".equals(type)) {
-                if ("start".equals(state) || "sentence_start".equals(state)) {
-                    firstAudioDataReceived = false;  // 重置标志
-                    firstAudioWritten = false;  // 重置标志
-                    addLog("Audio", "准备播放音频");
-                    addLog("Timing", "🔊 收到音频开始信号，设置 isPlaying=true");
-                    // 开始播放音频
-                    isPlaying = true;
-                    audioExecutor.execute(() -> {
-                        if (audioTrack != null) {
-                            try {
-                                if (audioTrack.getState() != AudioTrack.STATE_INITIALIZED) {
-                                    addLog("Audio", "重新初始化AudioTrack");
-                                    addLog("Timing", "🔊 AudioTrack 未初始化，开始重新初始化");
-                                    // 重新初始化AudioTrack
-                                    int minBufferSize = AudioTrack.getMinBufferSize(
-                                        SAMPLE_RATE,
-                                        AudioFormat.CHANNEL_OUT_MONO,
-                                        AUDIO_FORMAT
-                                    );
-                                    audioTrack = new AudioTrack.Builder()
-                                        .setAudioAttributes(new AudioAttributes.Builder()
-                                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                            .build())
-                                        .setAudioFormat(new AudioFormat.Builder()
-                                            .setEncoding(AUDIO_FORMAT)
-                                            .setSampleRate(SAMPLE_RATE)
-                                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                                            .build())
-                                        .setBufferSizeInBytes(minBufferSize)  // 使用最小缓冲区
-                                        .setTransferMode(AudioTrack.MODE_STREAM)
-                                        .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)  // 低延迟模式
-                                        .build();
-                                    addLog("Timing", "🔊 AudioTrack 初始化完成（低延迟模式）");
-                                }
-
-                                if (audioTrack.getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                                    audioTrack.play();
-                                    addLog("Audio", "AudioTrack开始播放");
-                                    addLog("Timing", "🔊 AudioTrack.play() 已调用，等待音频数据");
-                                }
-                            } catch (Exception e) {
-                                addLog("Audio", "AudioTrack初始化/播放失败: " + e.getMessage());
-                            }
-                        }
-                    });
-                } else if ("stop".equals(state)) {
-                    addLog("Audio", "停止接收新的音频数据，等待播放缓冲区排空");
-                    // 不立即设 isPlaying=false：AudioTrack 缓冲区里还有音频待播
-                    // 提交到 audioExecutor 队列末尾，等所有写入任务完成后再轮询排空
-                    audioExecutor.execute(() -> {
-                        waitForAudioTrackDrain();
-                        isPlaying = false;
-                        addLog("Audio", "AudioTrack 缓冲排空，麦克风已重新开启");
-                        // 自动重发 listen.start（与 py-xiaozhi 一致）
-                        // 告知服务端客户端已准备好接收下一轮语音
-                        if (isRecording) {
-                            try {
-                                JSONObject listenMsg = new JSONObject();
-                                listenMsg.put("type", "listen");
-                                listenMsg.put("state", "start");
-                                listenMsg.put("mode", "auto");
-                                if (!sessionId.isEmpty()) listenMsg.put("session_id", sessionId);
-                                webSocketManager.sendMessage(listenMsg.toString());
-                                addLog("Audio", "已自动重发 listen.start");
-                            } catch (JSONException e) {
-                                Log.e("XiaoZhi-Voice", "重发 listen.start 失败: " + e.getMessage());
-                            }
-                        }
-                    });
-                }
-            }
-            
-            // 文字显示规则（参考 py-xiaozhi / xiaozhi-android）：
-            // - tts.sentence_start → 显示 AI 回复（只显示一次，sentence_end 同文字不再重复）
-            // - stt              → 显示用户说的话（isFromServer=false）
-            // - llm / 其他       → 只含 emotion/emoji，不加入聊天气泡
-            if ("tts".equals(type) && "sentence_start".equals(state) && jsonMessage.has("text")) {
-                String text = jsonMessage.getString("text");
-                addLog("Timing", "📝 收到 tts.sentence_start，准备显示文字");
-                runOnUiThread(() -> {
-                    addLog("Timing", "📝 文字已显示到界面: " + text.substring(0, Math.min(20, text.length())) + "...");
-                    if (!isMessageExpanded && messageAdapter.getItemCount() == 0) {
-                        toggleMessageExpansion(); // 首条消息：自动展开
-                    } else if (!isMessageExpanded) {
-                        // 后续消息且消息区折叠：显示红点 + 标题抖动（V3-3）
-                        if (messageBadge != null) messageBadge.setVisibility(View.VISIBLE);
-                        shakeMessageHeader();
-                    }
-                    messageAdapter.addMessage(new Message(text, true));
-                    if (messagesRecyclerView != null)
-                        messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);
-                });
-            } else if ("stt".equals(type) && jsonMessage.has("text")) {
-                String text = jsonMessage.getString("text");
-                runOnUiThread(() -> {
-                    if (!isMessageExpanded && messageAdapter.getItemCount() == 0) {
-                        toggleMessageExpansion(); // 首条消息：自动展开
-                    } else if (!isMessageExpanded) {
-                        if (messageBadge != null) messageBadge.setVisibility(View.VISIBLE);
-                        shakeMessageHeader();
-                    }
-                    messageAdapter.addMessage(new Message(text, false));
-                    if (messagesRecyclerView != null)
-                        messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);
-                });
+            switch (type) {
+                case "hello":
+                    handleHello(jsonMessage);
+                    break;
+                case "bind":
+                    handleBind(jsonMessage);
+                    break;
+                case "tts":
+                    handleTts(jsonMessage);
+                    break;
+                case "stt":
+                    handleStt(jsonMessage);
+                    break;
+                default:
+                    break; // llm 等其他类型：仅日志记录，不需要额外处理
             }
         } catch (JSONException e) {
-            addLog("Error", "解析消息失败: " + e.getMessage());
+            LogUtils.getInstance().e(this, "XiaoZhi-Message", "解析消息失败", e);
         }
     }
 
-    private volatile boolean firstAudioDataReceived = false;
-    private volatile boolean firstAudioWritten = false;
+    /** 服务器 hello 消息：保存 session_id，后续所有消息都需要携带 */
+    private void handleHello(JSONObject jsonMessage) {
+        String sid = jsonMessage.optString("session_id", "");
+        if (!sid.isEmpty()) {
+            sessionId = sid;
+            Log.i("XiaoZhi", "已收到 session_id: " + sessionId);
+        }
+    }
+
+    /** 官方平台返回绑定验证码，弹出引导弹窗 */
+    private void handleBind(JSONObject jsonMessage) {
+        String code = jsonMessage.optString("code", "");
+        String msg = getString(R.string.bind_dialog_message, code);
+        runOnUiThread(() ->
+            new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.bind_dialog_title)
+                .setMessage(msg)
+                .setCancelable(false)
+                .setPositiveButton(R.string.bind_dialog_confirm, (dialog, which) -> {
+                    dialog.dismiss();
+                    webSocketManager.reconnect();
+                })
+                .show()
+        );
+    }
+
+    /**
+     * tts.start/sentence_start → 开始播放；tts.stop → 排空后重新开启麦克风。
+     * sentence_start 附带文字时，同时显示到聊天气泡（AI 回复只显示一次，sentence_end 同文字不重复）。
+     */
+    private void handleTts(JSONObject jsonMessage) throws JSONException {
+        String state = jsonMessage.optString("state");
+        if ("start".equals(state) || "sentence_start".equals(state)) {
+            addLog("Audio", "准备播放音频");
+            audioEngine.beginPlayback();
+        } else if ("stop".equals(state)) {
+            addLog("Audio", "停止接收新的音频数据，等待播放缓冲区排空");
+            audioEngine.endPlayback();
+        }
+
+        if ("sentence_start".equals(state) && jsonMessage.has("text")) {
+            displayMessage(jsonMessage.getString("text"), true);
+        }
+    }
+
+    /** stt → 显示用户说的话 */
+    private void handleStt(JSONObject jsonMessage) throws JSONException {
+        if (jsonMessage.has("text")) {
+            displayMessage(jsonMessage.getString("text"), false);
+        }
+    }
+
+    /** 文字显示规则（参考 py-xiaozhi / xiaozhi-android）：首条消息自动展开，折叠态显示红点+抖动提示 */
+    private void displayMessage(String text, boolean isFromServer) {
+        runOnUiThread(() -> {
+            if (!isMessageExpanded && messageAdapter.getItemCount() == 0) {
+                toggleMessageExpansion(); // 首条消息：自动展开
+            } else if (!isMessageExpanded) {
+                if (messageBadge != null) messageBadge.setVisibility(View.VISIBLE);
+                shakeMessageHeader();
+            }
+            messageAdapter.addMessage(new Message(text, isFromServer));
+            if (messagesRecyclerView != null)
+                messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);
+        });
+    }
 
     @Override
     public void onBinaryMessage(byte[] data) {
-        Log.i("XiaoZhi-Audio", String.format("收到音频数据: %d 字节, isPlaying=%b", data.length, isPlaying));
+        audioEngine.feedEncodedAudio(data);
+    }
 
-        if (!isPlaying) {
-            Log.i("XiaoZhi-Audio", "当前不在接收状态，忽略音频数据");
-            return;
-        }
+    // ── AudioEngine.Listener：音频子系统回调，桥接到 UI / WebSocket ──
 
-        // 记录首次收到音频数据的时间
-        if (!firstAudioDataReceived) {
-            firstAudioDataReceived = true;
-            addLog("Timing", "🎵 首次收到音频数据 (" + data.length + " 字节)");
-        }
+    @Override
+    public void onRecordingAmplitude(float amplitude) {
+        runOnUiThread(() -> { if (waveformView != null) waveformView.setAmplitude(amplitude); });
+    }
 
-        // 复制数据，避免被修改
-        final byte[] audioData = data.clone();
+    @Override
+    public void onPlaybackAmplitude(float rms) {
+        runOnUiThread(() -> { if (waveformView != null) waveformView.setPlayingAmplitude(rms); });
+    }
 
-        // 在主线程中检查状态
-        if (audioTrack == null || audioTrack.getState() != AudioTrack.STATE_INITIALIZED) {
-            Log.e("XiaoZhi-Audio", "错误: AudioTrack未初始化或状态错误");
-            return;
-        }
+    @Override
+    public void onEncodedAudio(byte[] data) {
+        webSocketManager.sendBinaryMessage(data);
+    }
 
-        if (decoderHandle == 0) {
-            Log.e("XiaoZhi-Audio", "错误: Opus解码器未初始化");
-            return;
-        }
-
-        // 在音频线程中处理
-        audioExecutor.execute(() -> {
+    @Override
+    public void onPlaybackDrained() {
+        addLog("Audio", "播放缓冲排空，麦克风已重新开启");
+        // 自动重发 listen.start（与 py-xiaozhi 一致）：告知服务端客户端已准备好接收下一轮语音
+        if (audioEngine.isRecording()) {
             try {
-                // 解码 Opus 数据
-                int decodedSamples = opusUtils.decode(decoderHandle, audioData, decodedBuffer);
-
-                if (decodedSamples < 0) {
-                    Log.e("XiaoZhi-Audio", String.format("Opus解码失败: %d", decodedSamples));
-                    return;
-                }
-
-                if (decodedSamples == 0) {
-                    return;
-                }
-
-                // 首次解码成功的日志
-                if (!firstAudioDataReceived) {
-                    addLog("Timing", "🎵 首次 Opus 解码成功 (" + decodedSamples + " 采样)");
-                }
-
-                // 计算 RMS 振幅并驱动波形动画（AI 播放时）
-                long sumSq = 0;
-                for (int i = 0; i < decodedSamples; i++) sumSq += (long) decodedBuffer[i] * decodedBuffer[i];
-                float rms = (float) Math.sqrt((double) sumSq / decodedSamples) / 32768f;
-                runOnUiThread(() -> { if (waveformView != null) waveformView.setPlayingAmplitude(rms); });
-
-                // 将 short[] 转换为 byte[]
-                byte[] pcmData = new byte[decodedSamples * 2];
-                for (int i = 0; i < decodedSamples; i++) {
-                    short sample = decodedBuffer[i];
-                    // 使用小端序（同Web端）
-                    pcmData[i * 2] = (byte) (sample & 0xff);
-                    pcmData[i * 2 + 1] = (byte) ((sample >> 8) & 0xff);
-                }
-                
-                // 使用阻塞模式写入，确保数据完整性
-                int written = 0;
-                int retryCount = 0;
-                while (written < pcmData.length && retryCount < 3) {  // 移除 isPlaying 检查，让数据继续写入
-                    if (audioTrack.getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                        audioTrack.play();
-                        Log.i("XiaoZhi-Audio", "重新开始播放");
-                    }
-
-                    int remaining = pcmData.length - written;
-                    int result = audioTrack.write(pcmData, written, remaining, AudioTrack.WRITE_BLOCKING);
-
-                    // 首次成功写入的日志
-                    if (result > 0 && !firstAudioWritten) {
-                        firstAudioWritten = true;
-                        addLog("Timing", "🔈 首次写入 AudioTrack (" + result + " 字节)");
-                    }
-
-                    if (result < 0) {
-                        Log.e("XiaoZhi-Audio", String.format("写入音频数据失败: %d", result));
-                        retryCount++;
-                        continue;
-                    } else if (result == 0) {
-                        break;
-                    }
-                    written += result;
-                }
-                
-                Log.i("XiaoZhi-Audio", String.format("成功写入 %d/%d 字节", written, pcmData.length));
-            } catch (Exception e) {
-                Log.e("XiaoZhi-Audio", "播放音频失败: " + e.getMessage());
-                e.printStackTrace();
+                JSONObject listenMsg = new JSONObject();
+                listenMsg.put("type", "listen");
+                listenMsg.put("state", "start");
+                listenMsg.put("mode", "auto");
+                if (!sessionId.isEmpty()) listenMsg.put("session_id", sessionId);
+                webSocketManager.sendMessage(listenMsg.toString());
+                addLog("Audio", "已自动重发 listen.start");
+            } catch (JSONException e) {
+                LogUtils.getInstance().e(this, "XiaoZhi-Voice", "重发 listen.start 失败", e);
             }
-        });
+        }
+    }
+
+    @Override
+    public void onLatencySummary(String summary) {
+        addLog("Timing", summary);
     }
 
     /** 隐藏操作引导卡片并记录"已了解"，之后不再展示 */
@@ -915,53 +659,10 @@ public class MainActivity extends AppCompatActivity implements WebSocketManager.
         LogUtils.getInstance().d(this, fullTag, message);
     }
 
-    /**
-     * 等待 AudioTrack 缓冲区排空，然后设置 flushUntilMs。
-     * 对齐 py-xiaozhi clear_audio_queue + xiaozhi-android waitForPlaybackCompletion：
-     * 排空后额外丢弃 300ms 的录音帧，清除 AudioRecord 缓冲区里的 TTS 回声。
-     */
-    private void waitForAudioTrackDrain() {
-        if (audioTrack == null) return;
-        try {
-            int stableCount = 0;
-            int lastPos = audioTrack.getPlaybackHeadPosition();
-            while (stableCount < 5) {
-                Thread.sleep(100);
-                int currentPos = audioTrack.getPlaybackHeadPosition();
-                if (currentPos == lastPos) {
-                    stableCount++;
-                } else {
-                    stableCount = 0;
-                    lastPos = currentPos;
-                }
-            }
-        } catch (InterruptedException ignored) {}
-        // AudioTrack 排空后，再丢弃 300ms 录音帧（清除 AudioRecord 里积压的回声帧）
-        flushUntilMs = System.currentTimeMillis() + 300;
-    }
-
     @Override
     protected void onDestroy() {
         super.onDestroy();
         webSocketManager.disconnect();
-        if (audioRecord != null) {
-            audioRecord.release();
-            audioRecord = null;
-        }
-        if (audioTrack != null) {
-            audioTrack.stop();
-            audioTrack.release();
-            audioTrack = null;
-        }
-        if (encoderHandle != 0) {
-            opusUtils.destroyEncoder(encoderHandle);
-            encoderHandle = 0;
-        }
-        if (decoderHandle != 0) {
-            opusUtils.destroyDecoder(decoderHandle);
-            decoderHandle = 0;
-        }
-        executorService.shutdown();
-        audioExecutor.shutdown();
+        audioEngine.release();
     }
-} 
+}
