@@ -29,12 +29,14 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.lhht.xiaozhi.R;
 import com.lhht.xiaozhi.adapters.MessageAdapter;
 import com.lhht.xiaozhi.models.Message;
+import com.lhht.xiaozhi.session.SessionViewModel;
 import com.lhht.xiaozhi.settings.SettingsManager;
 import com.lhht.xiaozhi.views.WaveformView;
 import com.lhht.xiaozhi.websocket.WebSocketManager;
@@ -50,6 +52,7 @@ public class MainActivity extends AppCompatActivity
     private WebSocketManager webSocketManager;
     private SettingsManager settingsManager;
     private AudioEngine audioEngine;
+    private SessionViewModel sessionViewModel;
     private TextView connectionStatus;
     private Button connectButton;
     private ImageButton sendButton;
@@ -58,7 +61,7 @@ public class MainActivity extends AppCompatActivity
     private WaveformView waveformView;
     private View voiceContainer;
     private View statusDot;
-    private String sessionId = ""; // 服务器 hello 里返回的 session_id
+    private volatile String sessionId = ""; // 服务器 hello 里返回的 session_id（音频线程也会读取）
     private MessageAdapter messageAdapter;
     private RecyclerView messagesRecyclerView;
     // 消息历史折叠/展开
@@ -115,12 +118,12 @@ public class MainActivity extends AppCompatActivity
         String deviceId = settingsManager.getFormattedDeviceId(this);
         String clientId = settingsManager.getClientId();
         Log.i("MainActivity", "设备ID: " + deviceId + "  ClientId: " + clientId);
-        webSocketManager = new WebSocketManager(this, deviceId, clientId);
-        webSocketManager.setListener(this);
 
-        // 音频子系统：录音/播放/Opus 编解码/应用层播放缓冲，全部封装在 AudioEngine 里
-        audioEngine = new AudioEngine(this, this);
-        audioEngine.init();
+        // 连接与音频会话放在 ViewModel 中：旋转屏幕 / 系统重建 Activity 时不会断线或结束通话
+        sessionViewModel = new ViewModelProvider(this).get(SessionViewModel.class);
+        sessionViewModel.init(this, deviceId, clientId);
+        webSocketManager = sessionViewModel.getWebSocketManager();
+        audioEngine = sessionViewModel.getAudioEngine();
 
         // 初始化视图
         connectionStatus = findViewById(R.id.connectionStatus);
@@ -164,6 +167,17 @@ public class MainActivity extends AppCompatActivity
         if (guideDismissButton != null) {
             guideDismissButton.setOnClickListener(v -> hideGuide());
         }
+
+        // 所有视图就绪后再绑定会话回调；Activity 重建时同步已有连接/通话状态
+        webSocketManager.setListener(this);
+        audioEngine.setListener(this);
+        syncSessionUi();
+    }
+
+    /** Activity 重建（旋转等）后，把 ViewModel 中仍然存活的会话状态同步回 UI。 */
+    private void syncSessionUi() {
+        setConnectionUi(webSocketManager.isConnected());
+        setCallUiActive(audioEngine.isRecording());
     }
 
     private void toggleMessageExpansion() {
@@ -237,7 +251,7 @@ public class MainActivity extends AppCompatActivity
                 String wsUrl = settingsManager.getWsUrl();
                 String token = settingsManager.getToken();
                 boolean enableToken = settingsManager.isTokenEnabled();
-                webSocketManager.connect(wsUrl, token, enableToken);
+                webSocketManager.connect(wsUrl, token, enableToken, settingsManager.isAllowInsecureTls());
             }
         } else {
             webSocketManager.disconnect();
@@ -310,7 +324,7 @@ public class MainActivity extends AppCompatActivity
                 ? settingsManager.getOtaToken()
                 : settingsManager.getToken();
         boolean useToken = !token.isEmpty();
-        webSocketManager.connect(wsUrl, token, useToken);
+        webSocketManager.connect(wsUrl, token, useToken, settingsManager.isAllowInsecureTls());
     }
 
     private void toggleRecording() {
@@ -346,40 +360,20 @@ public class MainActivity extends AppCompatActivity
             return;
         }
 
-        runOnUiThread(() -> {
-            if (voiceContainer != null) voiceContainer.setVisibility(View.VISIBLE);
-            if (callStatusText != null) {
-                callStatusText.setVisibility(View.VISIBLE);
-                callStatusText.setText(R.string.calling);
-            }
-            // 通话中：深蓝色 + 停止图标 + 文案更新
-            if (voiceButton != null) {
-                voiceButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
-                    ContextCompat.getColor(this, R.color.primary_dark)));
-                voiceButton.setImageResource(R.drawable.ic_stop);
-                voiceButton.setContentDescription("结束通话"); // R-4
-            }
-            if (voiceHintText != null) voiceHintText.setText("点击结束通话");
-        });
+        runOnUiThread(() -> setCallUiActive(true));
 
+        if (!audioEngine.isPlaybackAvailable()) {
+            Toast.makeText(this, "音频播放初始化失败，请重启应用", Toast.LENGTH_LONG).show();
+        }
         audioEngine.startRecording();
     }
 
     private void endCall() {
+        boolean wasActive = audioEngine.isRecording() || audioEngine.isPlaying();
         audioEngine.stopRecording();
-        runOnUiThread(() -> {
-            if (voiceContainer != null) voiceContainer.setVisibility(View.GONE);
-            if (callStatusText != null) callStatusText.setVisibility(View.GONE);
-            if (waveformView != null) waveformView.setAmplitude(0);
-            // 恢复待机态：亮蓝色 + 麦克风图标 + 文案恢复
-            if (voiceButton != null) {
-                voiceButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
-                    ContextCompat.getColor(this, R.color.primary)));
-                voiceButton.setImageResource(R.drawable.ic_mic);
-                voiceButton.setContentDescription("开始聊天"); // R-4
-            }
-            if (voiceHintText != null) voiceHintText.setText("点击开始聊天");
-        });
+        runOnUiThread(() -> setCallUiActive(false));
+
+        if (!wasActive) return;
 
         // 发送停止通话消息
         try {
@@ -390,6 +384,29 @@ public class MainActivity extends AppCompatActivity
             webSocketManager.sendMessage(stopMessage.toString());
         } catch (JSONException e) {
             LogUtils.getInstance().e(this, "XiaoZhi-Voice", "发送停止通话消息失败", e);
+        }
+    }
+
+    /** 通话态 UI 切换，startCall/endCall/Activity 重建共用。 */
+    private void setCallUiActive(boolean active) {
+        if (voiceContainer != null) {
+            voiceContainer.setVisibility(active ? View.VISIBLE : View.GONE);
+        }
+        if (callStatusText != null) {
+            callStatusText.setVisibility(active ? View.VISIBLE : View.GONE);
+            if (active) callStatusText.setText(R.string.calling);
+        }
+        if (waveformView != null && !active) {
+            waveformView.setAmplitude(0);
+        }
+        if (voiceButton != null) {
+            voiceButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                    ContextCompat.getColor(this, active ? R.color.primary_dark : R.color.primary)));
+            voiceButton.setImageResource(active ? R.drawable.ic_stop : R.drawable.ic_mic);
+            voiceButton.setContentDescription(active ? "结束通话" : "开始聊天"); // R-4
+        }
+        if (voiceHintText != null) {
+            voiceHintText.setText(active ? "点击结束通话" : "点击开始聊天");
         }
     }
 
@@ -461,10 +478,7 @@ public class MainActivity extends AppCompatActivity
     public void onConnected() {
         addLog("WebSocket", "已连接");
         runOnUiThread(() -> {
-            connectionStatus.setText(R.string.status_connected);
-            connectButton.setText(R.string.disconnect);
-            connectButton.setEnabled(true);
-            updateStatusDot(R.color.status_connected);
+            setConnectionUi(true);
             // 第一次连接成功时自动关闭操作引导
             hideGuide();
         });
@@ -474,10 +488,7 @@ public class MainActivity extends AppCompatActivity
     public void onDisconnected() {
         addLog("WebSocket", "已断开");
         runOnUiThread(() -> {
-            connectionStatus.setText(R.string.status_disconnected);
-            connectButton.setText(R.string.connect);
-            connectButton.setEnabled(true);
-            updateStatusDot(R.color.status_disconnected);
+            setConnectionUi(false);
             endCall();
         });
     }
@@ -486,12 +497,28 @@ public class MainActivity extends AppCompatActivity
     public void onError(String error) {
         addLog("Error", error);
         runOnUiThread(() -> {
+            // 错误可能发生在通话中：先结束通话，避免麦克风/播放状态卡死
+            if (audioEngine != null && (audioEngine.isRecording() || audioEngine.isPlaying())) {
+                endCall();
+            }
             connectionStatus.setText(R.string.status_error);
             updateStatusDot(R.color.status_error);
             connectButton.setText("重新连接");
             connectButton.setEnabled(true);
             Toast.makeText(this, "错误: " + error, Toast.LENGTH_SHORT).show();
         });
+    }
+
+    /** 连接态 UI 切换，onConnected/onDisconnected/Activity 重建共用。 */
+    private void setConnectionUi(boolean connected) {
+        if (connectionStatus != null) {
+            connectionStatus.setText(connected ? R.string.status_connected : R.string.status_disconnected);
+        }
+        if (connectButton != null) {
+            connectButton.setText(connected ? R.string.disconnect : R.string.connect);
+            connectButton.setEnabled(true);
+        }
+        updateStatusDot(connected ? R.color.status_connected : R.color.status_disconnected);
     }
 
     private void updateStatusDot(int colorRes) {
@@ -563,9 +590,14 @@ public class MainActivity extends AppCompatActivity
      */
     private void handleTts(JSONObject jsonMessage) throws JSONException {
         String state = jsonMessage.optString("state");
-        if ("start".equals(state) || "sentence_start".equals(state)) {
-            addLog("Audio", "准备播放音频");
-            audioEngine.beginPlayback();
+        if ("start".equals(state)) {
+            // 新一轮回复：清空上一轮残余音频并重置延迟埋点
+            addLog("Audio", "准备播放音频（新回合）");
+            audioEngine.beginPlayback(true);
+        } else if ("sentence_start".equals(state)) {
+            // 同一轮回复的下一句：保留 FIFO 中尚未播完的上一句音频
+            addLog("Audio", "准备播放音频（下一句）");
+            audioEngine.beginPlayback(false);
         } else if ("stop".equals(state)) {
             addLog("Audio", "停止接收新的音频数据，等待播放缓冲区排空");
             audioEngine.endPlayback();
@@ -644,6 +676,19 @@ public class MainActivity extends AppCompatActivity
         addLog("Timing", summary);
     }
 
+    @Override
+    public void onAudioError(String message) {
+        addLog("AudioError", message);
+        runOnUiThread(() -> {
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+            if (audioEngine != null && audioEngine.isRecording()) {
+                endCall();
+            } else {
+                setCallUiActive(false);
+            }
+        });
+    }
+
     /** 隐藏操作引导卡片并记录"已了解"，之后不再展示 */
     private void hideGuide() {
         if (guideCard != null && guideCard.getVisibility() == View.VISIBLE) {
@@ -662,7 +707,24 @@ public class MainActivity extends AppCompatActivity
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        webSocketManager.disconnect();
-        audioEngine.release();
+        // 连接与音频资源由 SessionViewModel 持有：旋转/配置变更时继续存活，
+        // 仅在 Activity 真正 finish 后由 ViewModel.onCleared() 释放。
+        // Listener 必须在每次销毁时解绑，否则旧 Activity 会被回调（并泄漏），
+        // 新 Activity 在 onCreate 中会重新绑定。
+        if (webSocketManager != null) {
+            webSocketManager.setListener(null);
+        }
+        if (audioEngine != null) {
+            audioEngine.setListener(null);
+        }
+        if (isFinishing()) {
+            // 用户真正离开页面：结束仍在显示的绑定弹窗并停止 OTA 轮询，
+            // 避免轮询线程继续持有已销毁的 Activity 长达 5 分钟。
+            if (bindingDialog != null && bindingDialog.isShowing()) {
+                bindingDialog.dismiss();
+            }
+            bindingDialog = null;
+            OtaService.stopPolling();
+        }
     }
 }

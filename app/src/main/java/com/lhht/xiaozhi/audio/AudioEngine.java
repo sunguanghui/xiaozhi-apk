@@ -1,17 +1,25 @@
 package com.lhht.xiaozhi.audio;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
+import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaRecorder;
+import android.os.Build;
+import android.os.Process;
 import android.util.Log;
+
+import androidx.core.content.ContextCompat;
 
 import com.lhht.xiaozhi.utils.LogUtils;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 封装录音、播放、Opus 编解码与应用层播放缓冲（PcmFifo）的音频子系统。
@@ -42,13 +50,15 @@ public class AudioEngine {
         void onPlaybackDrained();
         /** 一次 TTS 播放的结构化延迟汇总 */
         void onLatencySummary(String summary);
+        /** 录音/播放不可用等需要用户感知的音频错误 */
+        void onAudioError(String message);
     }
 
     private final Context context;
-    private final Listener listener;
+    private volatile Listener listener;
 
-    private AudioRecord audioRecord;
-    private AudioTrack audioTrack;
+    private volatile AudioRecord audioRecord;
+    private volatile AudioTrack audioTrack;
     private final OpusUtils opusUtils;
     private long encoderHandle;
     private long decoderHandle;
@@ -57,7 +67,7 @@ public class AudioEngine {
 
     private final ExecutorService recordExecutor = Executors.newSingleThreadExecutor();
     private final ExecutorService audioExecutor = Executors.newSingleThreadExecutor();
-    private Thread playbackThread;
+    private volatile Thread playbackThread;
     private volatile boolean playbackThreadRunning = false;
 
     private volatile boolean isRecording = false;
@@ -66,6 +76,13 @@ public class AudioEngine {
     private volatile boolean firstAudioDataReceived = false;
     private volatile boolean firstAudioWritten = false;
 
+    /** 录音循环代次：stop/release/重新 start 时递增，旧循环检测到代次变化后退出并自行释放 AudioRecord。 */
+    private volatile int recordGeneration = 0;
+    /** 播放回合代次：新一轮开始/结束通话时递增，用于丢弃属于旧回合的迟到音频包。 */
+    private volatile int playbackEpoch = 0;
+    /** 本轮播放中 FIFO 欠载（补静音）的次数，排空时输出，便于观察网络抖动。 */
+    private volatile int underrunChunks = 0;
+
     public AudioEngine(Context context, Listener listener) {
         this.context = context.getApplicationContext();
         this.listener = listener;
@@ -73,75 +90,141 @@ public class AudioEngine {
         this.audioFifo = new PcmFifo(FIFO_CAPACITY_SAMPLES);
     }
 
-    /** 初始化 AudioTrack、Opus 编解码器，并启动独立播放消费线程。在宿主 onCreate 中调用一次。 */
+    /** 宿主 Activity 重建时重新绑定回调；旧 Activity 销毁后应置空。 */
+    public void setListener(Listener listener) {
+        this.listener = listener;
+    }
+
+    /** 初始化 AudioTrack、Opus 编解码器，并启动独立播放消费线程。在会话首次创建时调用一次。 */
     public void init() {
         initAudioTrack();
         encoderHandle = opusUtils.createEncoder(SAMPLE_RATE, 1, 10);
         decoderHandle = opusUtils.createDecoder(SAMPLE_RATE, 1);
+        if (encoderHandle == 0 || decoderHandle == 0) {
+            LogUtils.getInstance().e(context, TAG,
+                    "Opus 编解码器初始化失败 encoder=" + encoderHandle + " decoder=" + decoderHandle,
+                    new IllegalStateException("opus init failed"));
+        }
         startPlaybackThread();
     }
 
     private void initAudioTrack() {
         int minBufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AUDIO_FORMAT);
         try {
-            audioTrack = new AudioTrack.Builder()
-                    .setAudioAttributes(new AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                            .build())
-                    .setAudioFormat(new AudioFormat.Builder()
-                            .setEncoding(AUDIO_FORMAT)
-                            .setSampleRate(SAMPLE_RATE)
-                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                            .build())
-                    .setBufferSizeInBytes(minBufferSize)
-                    .setTransferMode(AudioTrack.MODE_STREAM)
-                    .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
-                    .build();
+            AudioTrack track;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // AudioTrack.Builder 是 API 23 才有的；API 21/22 必须走下面的旧构造方法
+                AudioTrack.Builder builder = new AudioTrack.Builder()
+                        .setAudioAttributes(new AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build())
+                        .setAudioFormat(new AudioFormat.Builder()
+                                .setEncoding(AUDIO_FORMAT)
+                                .setSampleRate(SAMPLE_RATE)
+                                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                                .build())
+                        .setBufferSizeInBytes(minBufferSize)
+                        .setTransferMode(AudioTrack.MODE_STREAM);
 
+                // PERFORMANCE_MODE_LOW_LATENCY 是 API 26 才有的方法，低版本调用会 NoSuchMethodError
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    builder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY);
+                }
+                track = builder.build();
+            } else {
+                //noinspection deprecation
+                track = new AudioTrack(AudioManager.STREAM_MUSIC, SAMPLE_RATE,
+                        AudioFormat.CHANNEL_OUT_MONO, AUDIO_FORMAT,
+                        minBufferSize, AudioTrack.MODE_STREAM);
+            }
+            audioTrack = track;
             if (audioTrack.getState() == AudioTrack.STATE_INITIALIZED) {
-                Log.i(TAG, "AudioTrack初始化成功（低延迟模式，缓冲 " + minBufferSize + " 字节）");
+                Log.i(TAG, "AudioTrack初始化成功（缓冲 " + minBufferSize + " 字节，API " + Build.VERSION.SDK_INT + "）");
                 audioTrack.play();
             } else {
                 Log.e(TAG, "AudioTrack初始化失败: " + audioTrack.getState());
+                audioTrack = null;
             }
         } catch (Exception e) {
             LogUtils.getInstance().e(context, TAG, "创建AudioTrack失败", e);
+            audioTrack = null;
         }
+    }
+
+    /** 播放通道是否可用；初始化失败时 UI 应给出明确提示而不是“已连接但没声音”。 */
+    public boolean isPlaybackAvailable() {
+        AudioTrack track = audioTrack;
+        return track != null && track.getState() == AudioTrack.STATE_INITIALIZED;
     }
 
     private void startPlaybackThread() {
         playbackThreadRunning = true;
         playbackThread = new Thread(() -> {
+            Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO);
             short[] chunk = new short[PCM_CHUNK_SAMPLES];
             byte[] pcmBytes = new byte[PCM_CHUNK_SAMPLES * 2];
             while (playbackThreadRunning) {
                 if (!isPlaying) {
-                    try { Thread.sleep(20); } catch (InterruptedException ignored) {}
+                    sleepQuietly(20);
                     continue;
                 }
-                int gotSamples = audioFifo.pull(chunk, 0, PCM_CHUNK_SAMPLES);
-                for (int i = 0; i < PCM_CHUNK_SAMPLES; i++) {
-                    short sample = chunk[i];
-                    pcmBytes[i * 2] = (byte) (sample & 0xff);
-                    pcmBytes[i * 2 + 1] = (byte) ((sample >> 8) & 0xff);
+                AudioTrack track = audioTrack;
+                // 播放通道不可用时必须退避，否则会 100% 空转
+                if (track == null || track.getState() != AudioTrack.STATE_INITIALIZED) {
+                    sleepQuietly(50);
+                    continue;
                 }
-                if (audioTrack != null && audioTrack.getState() == AudioTrack.STATE_INITIALIZED) {
-                    if (audioTrack.getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                        audioTrack.play();
+                try {
+                    int gotSamples = audioFifo.pull(chunk, 0, PCM_CHUNK_SAMPLES);
+                    if (gotSamples < PCM_CHUNK_SAMPLES) {
+                        underrunChunks++;
                     }
-                    int result = audioTrack.write(pcmBytes, 0, pcmBytes.length, AudioTrack.WRITE_BLOCKING);
-                    if (result > 0 && !firstAudioWritten && gotSamples > 0) {
+                    for (int i = 0; i < PCM_CHUNK_SAMPLES; i++) {
+                        short sample = chunk[i];
+                        pcmBytes[i * 2] = (byte) (sample & 0xff);
+                        pcmBytes[i * 2 + 1] = (byte) ((sample >> 8) & 0xff);
+                    }
+                    if (track.getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
+                        track.play();
+                    }
+                    int result = writeBlocking(track, pcmBytes);
+                    if (result <= 0) {
+                        Log.w(TAG, "AudioTrack.write 返回 " + result + "，暂停 50ms");
+                        sleepQuietly(50);
+                        continue;
+                    }
+                    if (!firstAudioWritten && gotSamples > 0) {
                         firstAudioWritten = true;
                         latencyTracker.mark("first_track_write");
                         String summary = latencyTracker.summary();
                         latencyTracker.logSummary(context, "TTS播放延迟");
-                        if (listener != null) listener.onLatencySummary(summary);
+                        Listener l = listener;
+                        if (l != null) l.onLatencySummary(summary);
                     }
+                } catch (Exception e) {
+                    LogUtils.getInstance().e(context, TAG, "播放线程异常", e);
+                    sleepQuietly(50);
                 }
             }
         }, "AudioPlaybackThread");
         playbackThread.start();
+    }
+
+    private static int writeBlocking(AudioTrack track, byte[] data) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return track.write(data, 0, data.length, AudioTrack.WRITE_BLOCKING);
+        }
+        // API 21/22 没有带 writeMode 的重载；MODE_STREAM 下三参 write 即为阻塞写
+        return track.write(data, 0, data.length);
+    }
+
+    private static void sleepQuietly(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     // ── 录音 ─────────────────────────────────────────────────────────────
@@ -155,26 +238,56 @@ public class AudioEngine {
     }
 
     public void startRecording() {
-        if (audioRecord == null) {
-            audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC,
-                    SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, BUFFER_SIZE);
-        }
-        isRecording = true;
-        recordExecutor.execute(() -> {
-            audioRecord.startRecording();
-            short[] buffer = new short[OPUS_FRAME_SIZE];
-            byte[] encodedBuffer = new byte[1024];
-            long lastAudioTime = System.currentTimeMillis();
+        if (isRecording) return;
 
-            while (isRecording) {
-                int samplesRead = audioRecord.read(buffer, 0, OPUS_FRAME_SIZE);
+        // 用户可能在系统设置里撤销了权限；显式检查，避免 AudioRecord 抛 SecurityException
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            notifyAudioError("未授予麦克风权限，无法开始语音通话");
+            return;
+        }
+
+        final int generation = ++recordGeneration;
+        final AudioRecord record;
+        try {
+            record = new AudioRecord(MediaRecorder.AudioSource.MIC,
+                    SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, BUFFER_SIZE);
+        } catch (Exception e) {
+            LogUtils.getInstance().e(context, TAG, "创建AudioRecord失败", e);
+            notifyAudioError("麦克风初始化失败: " + e.getMessage());
+            return;
+        }
+        if (record.getState() != AudioRecord.STATE_INITIALIZED) {
+            record.release();
+            LogUtils.getInstance().e(context, TAG,
+                    "AudioRecord 状态异常: " + record.getState(),
+                    new IllegalStateException("AudioRecord not initialized"));
+            notifyAudioError("麦克风不可用，请检查权限或重启应用");
+            return;
+        }
+
+        audioRecord = record;
+        isRecording = true;
+        recordExecutor.execute(() -> recordLoop(record, generation));
+    }
+
+    private void recordLoop(AudioRecord record, int generation) {
+        Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO);
+        short[] buffer = new short[OPUS_FRAME_SIZE];
+        byte[] encodedBuffer = new byte[1024];
+        long lastAudioTime = System.currentTimeMillis();
+        try {
+            record.startRecording();
+            while (isRecording && generation == recordGeneration) {
+                int samplesRead = record.read(buffer, 0, OPUS_FRAME_SIZE);
                 if (samplesRead <= 0) continue;
 
                 float amplitude = 0;
                 for (int i = 0; i < samplesRead; i++) {
                     amplitude = Math.max(amplitude, Math.abs(buffer[i]) / 32768.0f);
                 }
-                if (listener != null) listener.onRecordingAmplitude(amplitude);
+                Listener l = listener;
+                if (l != null) l.onRecordingAmplitude(amplitude);
 
                 boolean isSilent = amplitude < SILENCE_AMPLITUDE_THRESHOLD;
                 if (!isSilent) {
@@ -193,7 +306,8 @@ public class AudioEngine {
                     if (!isPlaying && now >= flushUntilMs) {
                         byte[] encodedData = new byte[encodedBytes];
                         System.arraycopy(encodedBuffer, 0, encodedData, 0, encodedBytes);
-                        if (listener != null) listener.onEncodedAudio(encodedData);
+                        Listener callback = listener;
+                        if (callback != null) callback.onEncodedAudio(encodedData);
                     }
                 } else {
                     Log.e(TAG, "Opus编码失败: " + encodedBytes);
@@ -206,32 +320,68 @@ public class AudioEngine {
                     if (silenceBytes > 0) {
                         byte[] silenceData = new byte[silenceBytes];
                         System.arraycopy(encodedBuffer, 0, silenceData, 0, silenceBytes);
-                        if (listener != null) listener.onEncodedAudio(silenceData);
+                        Listener callback = listener;
+                        if (callback != null) callback.onEncodedAudio(silenceData);
                     }
-                    if (listener != null) listener.onRecordingAmplitude(0);
+                    Listener callback = listener;
+                    if (callback != null) callback.onRecordingAmplitude(0);
                 }
             }
-        });
+        } catch (Exception e) {
+            if (isRecording && generation == recordGeneration) {
+                LogUtils.getInstance().e(context, TAG, "录音线程异常", e);
+                notifyAudioError("录音异常: " + e.getMessage());
+            }
+        } finally {
+            try {
+                record.stop();
+            } catch (Exception ignored) {
+                // 可能尚未 startRecording 或已被系统回收
+            }
+            try {
+                record.release();
+            } catch (Exception ignored) {
+                // 忽略重复释放
+            }
+            if (audioRecord == record) {
+                audioRecord = null;
+            }
+            Log.i(TAG, "录音线程退出 (generation=" + generation + ")");
+        }
     }
 
+    /**
+     * 停止录音：只置标志 + 递增代次，音频资源由录音线程在 finally 中释放，
+     * 避免在 UI 线程上 release() 与正在执行的 read() 发生竞态。
+     */
     public void stopRecording() {
         isRecording = false;
-        isPlaying = false; // 重置播放状态，防止下次通话被屏蔽
-        if (audioRecord != null) {
-            audioRecord.stop();
-            audioRecord.release();
-            audioRecord = null;
-        }
+        recordGeneration++;
+        isPlaying = false;
+        playbackEpoch++;
+        audioFifo.clear();
+        underrunChunks = 0;
     }
 
     // ── 播放 ─────────────────────────────────────────────────────────────
 
-    /** 收到 tts.start / sentence_start：开始一轮新的播放，重置延迟埋点 */
-    public void beginPlayback() {
-        firstAudioDataReceived = false;
-        firstAudioWritten = false;
-        latencyTracker.reset();
-        latencyTracker.mark("tts_start");
+    /**
+     * 收到 tts.start / sentence_start。
+     *
+     * @param newRound true 表示一条新的 TTS 回复（tts.start）：清空 FIFO 中上一轮的残余音频、
+     *                 重置延迟埋点与欠载计数；false 表示同一回复的下一句（sentence_start），
+     *                 仅保持播放状态，避免把上一句还没播完的音频清掉。
+     */
+    public void beginPlayback(boolean newRound) {
+        if (newRound) {
+            playbackEpoch++;
+            audioFifo.clear();
+            underrunChunks = 0;
+            firstAudioDataReceived = false;
+            firstAudioWritten = false;
+            latencyTracker.reset();
+            latencyTracker.mark("tts_start");
+        }
         isPlaying = true;
     }
 
@@ -241,10 +391,15 @@ public class AudioEngine {
      * （对齐 py-xiaozhi clear_audio_queue / xiaozhi-android waitForPlaybackCompletion）。
      */
     public void endPlayback() {
+        final int epoch = playbackEpoch;
         audioExecutor.execute(() -> {
             waitForFifoDrain();
+            // 等待期间可能已经开始下一轮（或用户挂断），此时不能再把状态改成“已停止”
+            if (epoch != playbackEpoch) return;
             isPlaying = false;
-            if (listener != null) listener.onPlaybackDrained();
+            Log.i(TAG, "本轮播放排空，FIFO 欠载 " + underrunChunks + " 次");
+            Listener l = listener;
+            if (l != null) l.onPlaybackDrained();
         });
     }
 
@@ -259,7 +414,9 @@ public class AudioEngine {
                     stableCount = 0;
                 }
             }
-        } catch (InterruptedException ignored) {}
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
         flushUntilMs = System.currentTimeMillis() + ECHO_FLUSH_MS;
     }
 
@@ -272,13 +429,16 @@ public class AudioEngine {
             latencyTracker.mark("first_binary");
         }
 
-        final byte[] audioData = data.clone();
         if (decoderHandle == 0) {
             Log.e(TAG, "错误: Opus解码器未初始化");
             return;
         }
 
+        final byte[] audioData = data.clone();
+        final int epoch = playbackEpoch;
         audioExecutor.execute(() -> {
+            // 解码任务排队期间可能已经开始新一轮 / 挂断，旧回合的包直接丢弃
+            if (epoch != playbackEpoch) return;
             try {
                 short[] decodeBuf = new short[OPUS_FRAME_SIZE];
                 int decodedSamples = opusUtils.decode(decoderHandle, audioData, decodeBuf);
@@ -286,14 +446,15 @@ public class AudioEngine {
                     Log.e(TAG, "Opus解码失败: " + decodedSamples);
                     return;
                 }
-                if (decodedSamples == 0) return;
+                if (decodedSamples == 0 || epoch != playbackEpoch) return;
 
                 latencyTracker.mark("first_decode");
 
                 long sumSq = 0;
                 for (int i = 0; i < decodedSamples; i++) sumSq += (long) decodeBuf[i] * decodeBuf[i];
                 float rms = (float) Math.sqrt((double) sumSq / decodedSamples) / 32768f;
-                if (listener != null) listener.onPlaybackAmplitude(rms);
+                Listener l = listener;
+                if (l != null) l.onPlaybackAmplitude(rms);
 
                 audioFifo.push(decodeBuf, 0, decodedSamples);
             } catch (Exception e) {
@@ -302,24 +463,49 @@ public class AudioEngine {
         });
     }
 
-    /** 释放所有资源，在宿主 onDestroy 中调用 */
+    /** 释放所有资源，在会话 ViewModel 被清理时调用 */
     public void release() {
         isRecording = false;
         isPlaying = false;
+        recordGeneration++;
+        playbackEpoch++;
         playbackThreadRunning = false;
-        if (playbackThread != null) {
-            playbackThread.interrupt();
-            playbackThread = null;
+        audioFifo.clear();
+
+        Thread thread = playbackThread;
+        playbackThread = null;
+        if (thread != null) {
+            thread.interrupt();
+            try {
+                thread.join(300);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
-        if (audioRecord != null) {
-            audioRecord.release();
-            audioRecord = null;
+
+        AudioTrack track = audioTrack;
+        audioTrack = null;
+        if (track != null) {
+            try {
+                track.stop();
+            } catch (Exception ignored) {
+            }
+            try {
+                track.release();
+            } catch (Exception ignored) {
+            }
         }
-        if (audioTrack != null) {
-            audioTrack.stop();
-            audioTrack.release();
-            audioTrack = null;
+
+        // 录音线程会在 finally 中自行释放 AudioRecord；这里只等待它退出
+        recordExecutor.shutdownNow();
+        audioExecutor.shutdownNow();
+        try {
+            recordExecutor.awaitTermination(500, TimeUnit.MILLISECONDS);
+            audioExecutor.awaitTermination(500, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
+
         if (encoderHandle != 0) {
             opusUtils.destroyEncoder(encoderHandle);
             encoderHandle = 0;
@@ -328,7 +514,12 @@ public class AudioEngine {
             opusUtils.destroyDecoder(decoderHandle);
             decoderHandle = 0;
         }
-        recordExecutor.shutdown();
-        audioExecutor.shutdown();
+        Log.i(TAG, "AudioEngine 已释放");
+    }
+
+    private void notifyAudioError(String message) {
+        LogUtils.getInstance().e(context, TAG, message, new IllegalStateException(message));
+        Listener l = listener;
+        if (l != null) l.onAudioError(message);
     }
 }

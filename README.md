@@ -3,7 +3,7 @@
 > **灵犀**（Lingxi）—— 心有灵犀一点通的 AI 语音助手。  
 > 基于官方小智平台（xiaozhi.me）的 Android 语音对话客户端，支持实时语音通话和文字交互。同时兼容私有部署的自建服务器。
 
-[![Android](https://img.shields.io/badge/Android-10%2B-green)](https://developer.android.com)
+[![Android](https://img.shields.io/badge/Android-5.0%2B-green)](https://developer.android.com)
 [![Java](https://img.shields.io/badge/Java-11-blue)](https://www.java.com)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/sunguanghui/xiaozhi-apk)](https://github.com/sunguanghui/xiaozhi-apk/releases)
@@ -17,9 +17,9 @@
 | 🎤 实时语音通话 | Opus 编解码，16kHz 单声道，60ms 帧，低延迟 |
 | 💬 文字消息 | 支持文字输入与 AI 对话，消息历史可展开查看 |
 | 🔊 AI语音回复 | TTS 自动播放，波形动画实时显示 |
-| 🌐 官方平台接入 | 对接 xiaozhi.me，扫码绑定，开箱即用 |
+| 🌐 官方平台接入 | 对接 xiaozhi.me，验证码绑定，开箱即用 |
 | 🏠 自建服务器 | 支持局域网私有部署，完全可控 |
-| 🔄 自动重连 | 断线后自动重连，5 秒间隔，稳定可靠 |
+| 🔄 自动重连 | 断线后自动重连，指数退避 2s → 30s，静默期间不再误判 |
 | 🌙 深色/浅色主题 | 跟随系统自动切换 |
 | 🔐 回声消除 | TTS 播放期间自动抑制录音发送，防止回声 |
 
@@ -29,7 +29,7 @@
 
 ### 下载安装
 
-从 [GitHub Releases](https://github.com/sunguanghui/xiaozhi-apk/releases) 下载最新 APK，安装到 Android 10+ 设备。
+从 [GitHub Releases](https://github.com/sunguanghui/xiaozhi-apk/releases) 下载最新 APK，安装到 Android 5.0（API 21）及以上设备。
 
 > 安装时需允许"安装未知应用"权限。
 
@@ -62,7 +62,7 @@
 
 打开 App → 右上角 **⚙ 设置** → 开启"接入官方小智平台(xiaozhi.me)"开关 → 点击**保存**。
 
-> 切换到官方模式时，自建服务器配置区域会自动隐藏；Token 字段会自动清空，防止旧数据干扰绑定流程。
+> 切换到官方模式时，自建服务器配置区域会自动隐藏，连接时也不会携带自建模式的 Token。
 
 **第2步：连接并获取绑定验证码**
 
@@ -117,7 +117,8 @@ App 会先请求官方 OTA 接口获取激活状态：
 5. 点击**保存**
 6. 返回主界面 → 点击**连接**
 
-> 连接局域网服务器时，如提示网络错误，请在 `network_security_config.xml` 中添加服务器 IP 白名单（参见开发文档）。
+> 局域网 `ws://` 地址可直接使用，App 自身放行了明文连接，无需修改系统网络配置。
+> 若自建服务器使用**自签名证书**，可在设置页打开"允许自签名/不受信任的 TLS 证书"，否则连接会因证书校验失败被拒绝。
 
 ---
 
@@ -164,6 +165,7 @@ App 会先请求官方 OTA 接口获取激活状态：
 | WebSocket 地址 | 自建服务器地址（仅在自建模式下显示） |
 | Token | 服务器认证令牌（仅在自建模式下显示） |
 | 启用 Token 认证 | 是否在连接时携带 Bearer Token |
+| 允许不受信任的 TLS 证书 | 仅用于自签名证书的自建服务器；默认关闭（系统证书校验） |
 | 保存 | 保存所有设置，自动返回主界面 |
 | 导出调试日志 | 右上角菜单 → 导出日志文件，用于排查问题 |
 
@@ -184,9 +186,9 @@ App 会先请求官方 OTA 接口获取激活状态：
 | 连接按钮点击无反应 | Token 配置错误或网络不通 | 导出日志查看具体错误 |
 | 通话无声音 | 麦克风权限未授予 | 系统设置 → 应用权限 → 开启麦克风 |
 | AI 回复重复之前说的话 | 回声（扬声器声音被麦克风录入）| 使用耳机或降低音量 |
-| 第二轮对话不响应 | 网络抖动导致连接断开 | 断开后重新连接 |
-| 官方平台验证码弹窗不出现 | 旧版本遗留的无效 token | 进设置关掉再开启官方模式开关（自动清空 token）|
-| 局域网地址连接失败 | 明文 HTTP 被拦截 | 将设备 IP 添加至 `network_security_config.xml` |
+| 第二轮对话不响应 | 网络抖动导致连接断开 | 断开后重新连接（App 也会按 2s→30s 指数退避自动重连） |
+| 官方平台验证码弹窗不出现 | 官方 OTA 请求失败（网络/DNS 异常） | 导出日志确认 OTA 响应，恢复网络后重试 |
+| 局域网或自签名服务器连不上 | 明文被拦截 或 证书不受信任 | 局域网 `ws://` 无需额外配置；自签名证书在设置页打开 TLS 开关 |
 
 ---
 
@@ -210,16 +212,23 @@ cd xiaozhi-apk
 ./gradlew assembleDebug
 # 输出：app/build/outputs/apk/debug/app-debug.apk
 
+# 单元测试（PcmFifo / LatencyTracker）
+./gradlew testDebugUnitTest
+
 # Release 包（需配置签名）
 ./gradlew assembleRelease
 # 输出：app/build/outputs/apk/release/app-release.apk
 ```
 
+版本号可通过环境变量注入（CI 已自动使用构建序号）：
+
+```bash
+VERSION_CODE=42 VERSION_NAME=1.0.42 ./gradlew assembleRelease
+```
+
 ### CI/CD 自动构建
 
-每次推送到 `main` 分支，GitHub Actions 自动构建 Debug + Release APK。
-
-发布新版本时，在 GitHub 创建 Release，Actions 自动构建签名 Release APK 并上传。
+每次推送到 `main` 分支，GitHub Actions 自动运行单元测试并构建 Debug + Release APK。
 
 **所需 Secrets**（在 GitHub 仓库 Settings → Secrets 中配置）：
 
@@ -237,10 +246,15 @@ cd xiaozhi-apk
 ```
 com.lhht.xiaozhi/
 ├── activities/
-│   ├── MainActivity.java       # 主界面：通话、消息、连接控制
+│   ├── MainActivity.java       # 主界面：通话、消息、连接控制（UI 层）
 │   ├── SettingsActivity.java   # 设置页面
-│   └── OnboardingActivity.java # 新手引导（新手引导 ViewPager2）
+│   └── OnboardingActivity.java # 新手引导（ViewPager2）
+├── session/
+│   └── SessionViewModel.java   # 会话持有者：旋转时保留连接/音频，onCleared 统一释放
 ├── audio/
+│   ├── AudioEngine.java        # 录音 + Opus 编码 + 解码 + 播放线程
+│   ├── PcmFifo.java            # 播放侧 PCM 环形缓冲（解耦解码与播放节奏）
+│   ├── LatencyTracker.java     # TTS 端到端延迟埋点
 │   └── OpusUtils.java          # Opus JNI 编解码单例
 ├── adapters/
 │   └── MessageAdapter.java     # 消息气泡列表适配器
@@ -250,11 +264,18 @@ com.lhht.xiaozhi/
 │   └── SettingsManager.java    # 配置持久化（SharedPreferences）
 ├── utils/
 │   ├── LogUtils.java           # 日志工具（文件写入 + SAF 导出）
-│   └── OtaService.java         # OTA HTTP 接口（设备激活/绑定）
+│   └── OtaService.java         # OTA HTTP 接口（设备激活/绑定轮询）
 ├── views/
 │   └── WaveformView.java       # 自定义波形动画 View
 └── websocket/
-    └── WebSocketManager.java   # WebSocket 连接管理（含 SSL/重连）
+    └── WebSocketManager.java   # WebSocket 连接管理（保活/重连/TLS）
+```
+
+**音频链路**
+
+```
+麦克风 → AudioRecord → Opus 编码(16k) → WebSocket
+WebSocket → Opus 解码 → PcmFifo(1s 环形缓冲) → 播放线程(20ms/块) → AudioTrack
 ```
 
 **核心依赖**
@@ -263,6 +284,7 @@ com.lhht.xiaozhi/
 |---|---|---|
 | Java-WebSocket | 1.5.4 | WebSocket 客户端 |
 | Material Components | 1.11.0 | Material3 UI 组件 |
+| Lifecycle ViewModel | 2.6.2 | 配置变更时保留会话 |
 | Opus（预编译 .so） | — | 音频编解码 |
 | AndroidX AppCompat | 1.6.1 | 兼容层 |
 

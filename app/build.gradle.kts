@@ -2,6 +2,10 @@ plugins {
     alias(libs.plugins.android.application)
 }
 
+// CI 可通过 VERSION_CODE / VERSION_NAME 注入递增版本号，避免所有 Release 都是 versionCode=1
+val injectedVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
+val injectedVersionName = System.getenv("VERSION_NAME") ?: "1.0.0"
+
 android {
     namespace = "com.lhht.xiaozhi"
     compileSdk = 35
@@ -10,8 +14,8 @@ android {
         applicationId = "com.lhht.xiaozhi.ai"
         minSdk = 21
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = injectedVersionCode
+        versionName = injectedVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -68,11 +72,12 @@ android {
 
 dependencies {
     implementation(libs.appcompat)
-    implementation("com.google.android.material:material:1.11.0")
+    implementation(libs.material)
+    implementation(libs.lifecycle.viewmodel)
+    implementation(libs.recyclerview)
+    implementation(libs.viewpager2)
+    implementation(libs.java.websocket)
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
-
-    // WebSocket
-    implementation("org.java-websocket:Java-WebSocket:1.5.4")
 }

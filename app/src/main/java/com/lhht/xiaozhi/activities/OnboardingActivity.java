@@ -130,8 +130,9 @@ public class OnboardingActivity extends AppCompatActivity {
     private void updateDotIndicator(int position) {
         for (int i = 0; i < dotIndicator.getChildCount(); i++) {
             View dot = dotIndicator.getChildAt(i);
-            dot.setBackgroundTintList(getColorStateList(
-                    i == position ? R.color.primary : R.color.text_secondary
+            // Context.getColorStateList(int) 是 API 23+，minSdk 21 必须走 ContextCompat
+            dot.setBackgroundTintList(ContextCompat.getColorStateList(
+                    this, i == position ? R.color.primary : R.color.text_secondary
             ));
         }
     }

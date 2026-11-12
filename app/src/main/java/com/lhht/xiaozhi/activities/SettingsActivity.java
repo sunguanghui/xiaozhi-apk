@@ -28,6 +28,7 @@ public class SettingsActivity extends AppCompatActivity {
     private TextInputEditText tokenInput;
     private SwitchMaterial enableTokenSwitch;
     private SwitchMaterial useOfficialSwitch;
+    private SwitchMaterial allowInsecureTlsSwitch;
     // 大屏布局（sw600dp）中该容器为 LinearLayout，使用基类 View 兼容两种布局
     private View officialConfigCard;
     private View selfHostConfigCard;
@@ -50,6 +51,7 @@ public class SettingsActivity extends AppCompatActivity {
         tokenInput = findViewById(R.id.tokenInput);
         enableTokenSwitch = findViewById(R.id.enableTokenSwitch);
         useOfficialSwitch = findViewById(R.id.useOfficialSwitch);
+        allowInsecureTlsSwitch = findViewById(R.id.allowInsecureTlsSwitch);
         officialConfigCard = findViewById(R.id.officialConfigCard);
         selfHostConfigCard = findViewById(R.id.selfHostConfigCard);
         deviceIdText = findViewById(R.id.deviceIdText);
@@ -103,6 +105,9 @@ public class SettingsActivity extends AppCompatActivity {
         });
 
         enableTokenSwitch.setChecked(settingsManager.isTokenEnabled());
+        if (allowInsecureTlsSwitch != null) {
+            allowInsecureTlsSwitch.setChecked(settingsManager.isAllowInsecureTls());
+        }
 
         // 官方平台开关
         boolean useOfficial = settingsManager.isUseOfficialServer();
@@ -148,6 +153,9 @@ public class SettingsActivity extends AppCompatActivity {
                 ? actualToken : inputToken;
         boolean enableToken = enableTokenSwitch.isChecked();
         settingsManager.saveSettings(wsUrl, token, enableToken);
+        if (allowInsecureTlsSwitch != null) {
+            settingsManager.setAllowInsecureTls(allowInsecureTlsSwitch.isChecked());
+        }
 
         Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show();
         finish();

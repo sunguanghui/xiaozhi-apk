@@ -201,7 +201,23 @@
                             android:layout_height="wrap_content"
                             android:text="@string/enable_token"
                             android:textSize="15sp"
-                            android:layout_marginBottom="20dp" />
+                            android:layout_marginBottom="4dp" />
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/allowInsecureTlsSwitch"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/allow_insecure_tls"
+                            android:textSize="15sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:layout_marginBottom="20dp"
+                            android:text="@string/allow_insecure_tls_hint"
+                            android:textSize="12sp"
+                            android:textColor="@color/text_secondary" />
 
                         <View
                             android:layout_width="match_parent"

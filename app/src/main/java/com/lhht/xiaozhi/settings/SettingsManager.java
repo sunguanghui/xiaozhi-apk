@@ -16,6 +16,7 @@ public class SettingsManager {
     private static final String KEY_USE_OFFICIAL = "use_official_server";
     private static final String KEY_CLIENT_ID = "client_id";
     private static final String KEY_SERIAL_NUMBER = "serial_number";
+    private static final String KEY_ALLOW_INSECURE_TLS = "allow_insecure_tls";
     // OTA 动态下发的 WebSocket URL 和 token
     private static final String KEY_OTA_WS_URL   = "ota_ws_url";
     private static final String KEY_OTA_TOKEN     = "ota_token";
@@ -49,6 +50,17 @@ public class SettingsManager {
 
     public boolean isTokenEnabled() {
         return preferences.getBoolean(KEY_ENABLE_TOKEN, true);
+    }
+
+    // ── TLS 证书校验 ─────────────────────────────────────────────────────────
+
+    /** 是否允许自签名/不受信任的 TLS 证书（默认关闭，仅自建服务器调试时使用）。 */
+    public boolean isAllowInsecureTls() {
+        return preferences.getBoolean(KEY_ALLOW_INSECURE_TLS, false);
+    }
+
+    public void setAllowInsecureTls(boolean allow) {
+        preferences.edit().putBoolean(KEY_ALLOW_INSECURE_TLS, allow).apply();
     }
 
     // ── 官方平台开关 ─────────────────────────────────────────────────────────
