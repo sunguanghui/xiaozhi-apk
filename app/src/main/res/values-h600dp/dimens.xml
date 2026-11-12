@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 高度充足（>=600dp，绝大多数手机竖屏、平板）时使用更宽松的引导页尺寸 -->
+    <dimen name="onboarding_page_padding">40dp</dimen>
+    <dimen name="onboarding_image_size">160dp</dimen>
+    <dimen name="onboarding_image_margin_bottom">48dp</dimen>
+    <dimen name="onboarding_title_size">24sp</dimen>
+    <dimen name="onboarding_title_margin_bottom">16dp</dimen>
+    <dimen name="onboarding_desc_size">16sp</dimen>
+    <item name="onboarding_line_spacing" type="dimen" format="float">1.6</item>
+</resources>

@@ -18,6 +18,7 @@ import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.google.android.material.textfield.TextInputEditText;
 import com.lhht.xiaozhi.R;
 import com.lhht.xiaozhi.settings.SettingsManager;
+import com.lhht.xiaozhi.utils.ImeInsetsHelper;
 import com.lhht.xiaozhi.utils.LogUtils;
 
 import java.io.File;
@@ -67,6 +68,10 @@ public class SettingsActivity extends AppCompatActivity {
 
         // 保存按钮
         saveButton.setOnClickListener(v -> saveSettings());
+
+        // Android 15（targetSdk 35）键盘不再自动 resize 窗口，手动按 IME inset 收缩内容区，
+        // 避免地址/Token 输入框被键盘遮挡
+        ImeInsetsHelper.apply(this, null);
     }
 
     @Override

@@ -1,35 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+    用 ScrollView 包裹并开启 fillViewport：
+    - 高度足够的设备（values-h600dp）：内容垂直居中，和原效果一致；
+    - 高度较小的设备（如 720x480 电视盒子、横屏手机）：说明文字不会再被裁掉，
+      极端情况下还可以上下滚动查看。
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
-    android:padding="40dp">
+    android:fillViewport="true"
+    android:overScrollMode="never"
+    android:scrollbars="none">
 
-    <ImageView
-        android:id="@+id/onboardingImage"
-        android:layout_width="160dp"
-        android:layout_height="160dp"
-        android:layout_marginBottom="48dp"
-        android:scaleType="fitCenter" />
-
-    <TextView
-        android:id="@+id/onboardingTitle"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:textColor="@color/text_primary"
+        android:orientation="vertical"
         android:gravity="center"
-        android:layout_marginBottom="16dp" />
+        android:padding="@dimen/onboarding_page_padding">
 
-    <TextView
-        android:id="@+id/onboardingDesc"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textSize="16sp"
-        android:textColor="@color/text_secondary"
-        android:gravity="center"
-        android:lineSpacingMultiplier="1.6" />
+        <ImageView
+            android:id="@+id/onboardingImage"
+            android:layout_width="@dimen/onboarding_image_size"
+            android:layout_height="@dimen/onboarding_image_size"
+            android:layout_marginBottom="@dimen/onboarding_image_margin_bottom"
+            android:scaleType="fitCenter" />
 
-</LinearLayout>
+        <TextView
+            android:id="@+id/onboardingTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/onboarding_title_size"
+            android:textStyle="bold"
+            android:textColor="@color/text_primary"
+            android:gravity="center"
+            android:layout_marginBottom="@dimen/onboarding_title_margin_bottom" />
+
+        <TextView
+            android:id="@+id/onboardingDesc"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/onboarding_desc_size"
+            android:textColor="@color/text_secondary"
+            android:gravity="center"
+            android:lineSpacingMultiplier="@dimen/onboarding_line_spacing" />
+
+    </LinearLayout>
+
+</ScrollView>

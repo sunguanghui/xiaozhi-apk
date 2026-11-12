@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        引导页的默认尺寸：面向高度较小的屏幕（如 720x480 的电视盒子 / 横屏手机）。
+        高度 >= 600dp 的设备由 values-h600dp/dimens.xml 覆盖为原来更宽松的尺寸。
+        这样可保证引导页的说明文字在短屏上不会被裁掉。
+    -->
+    <dimen name="onboarding_page_padding">24dp</dimen>
+    <dimen name="onboarding_image_size">120dp</dimen>
+    <dimen name="onboarding_image_margin_bottom">24dp</dimen>
+    <dimen name="onboarding_title_size">20sp</dimen>
+    <dimen name="onboarding_title_margin_bottom">12dp</dimen>
+    <dimen name="onboarding_desc_size">14sp</dimen>
+    <item name="onboarding_line_spacing" type="dimen" format="float">1.5</item>
+</resources>

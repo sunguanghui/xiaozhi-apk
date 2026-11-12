@@ -69,14 +69,14 @@ public class OnboardingActivity extends AppCompatActivity {
         pages.add(new OnboardingPage(
                 R.drawable.ic_settings,
                 "两种接入方式",
-                "🌐 官方平台（推荐）\n设置→开启官方模式→点击连接\n输入6位验证码在 xiaozhi.me 完成绑定\n\n🏠 自建服务器\n填写 WebSocket 地址即可直连"
+                "官方平台（推荐）\n设置中开启官方模式，再点击连接\n输入6位验证码在 xiaozhi.me 完成绑定\n\n自建服务器\n填写 WebSocket 地址即可直连"
         ));
 
         // 第3页：核心交互三步走
         pages.add(new OnboardingPage(
                 R.drawable.ic_chat,
                 "三步开始聊天",
-                "① 点击右上角 ⚙ 进入设置并配置\n② 点击「连接」，等待状态点变绿\n③ 点击麦克风按钮，开始语音对话！\n\n💡 长按麦克风可快速打开设置"
+                "1. 点击右上角设置图标进入设置并配置\n2. 点击「连接」，等待状态点变绿\n3. 点击麦克风按钮，开始语音对话！\n\n提示：长按麦克风可快速打开设置"
         ));
 
         // 第4页：权限申请

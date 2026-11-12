@@ -34,6 +34,7 @@
             android:name=".activities.SettingsActivity"
             android:label="@string/settings"
             android:theme="@style/Theme.XiaoZhi"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false" />
 
         <provider

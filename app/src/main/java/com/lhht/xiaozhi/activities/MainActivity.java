@@ -23,6 +23,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.lhht.xiaozhi.utils.OtaService;
 import com.lhht.xiaozhi.utils.LogUtils;
+import com.lhht.xiaozhi.utils.ImeInsetsHelper;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -172,6 +173,10 @@ public class MainActivity extends AppCompatActivity
         webSocketManager.setListener(this);
         audioEngine.setListener(this);
         syncSessionUi();
+
+        // 处理软键盘遮挡：targetSdk 35 在 Android 15 上不再自动 resize 窗口，
+        // 需要按 IME inset 收缩内容区，否则输入框和聊天记录会被键盘盖住
+        ImeInsetsHelper.apply(this, messageInput);
     }
 
     /** Activity 重建（旋转等）后，把 ViewModel 中仍然存活的会话状态同步回 UI。 */
@@ -627,6 +632,23 @@ public class MainActivity extends AppCompatActivity
             messageAdapter.addMessage(new Message(text, isFromServer));
             if (messagesRecyclerView != null)
                 messagesRecyclerView.smoothScrollToPosition(messageAdapter.getItemCount() - 1);
+            // 输入中收到新消息会撑高列表、把输入框挤到键盘下面，这里保持输入框可见
+            keepInputVisibleIfTyping();
+        });
+    }
+
+    /** 键盘展开且输入框有焦点时，保证输入框始终位于键盘上方。 */
+    private void keepInputVisibleIfTyping() {
+        if (messageInput == null || !messageInput.isShown() || !messageInput.isFocused()) return;
+        final View input = messageInput;
+        final View content = findViewById(android.R.id.content);
+        if (content == null) return;
+        content.post(() -> {
+            if (input.getWidth() <= 0) return;
+            int extra = Math.round(16 * getResources().getDisplayMetrics().density);
+            input.requestRectangleOnScreen(
+                    new android.graphics.Rect(0, 0, input.getWidth(), input.getHeight() + extra),
+                    true);
         });
     }
 
