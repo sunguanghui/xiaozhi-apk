@@ -316,6 +316,16 @@ public class AudioEngine {
         Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO);
         AudioRecord record = null;
         try {
+            // 录音线程内再检查一次权限：lint 要求直接使用 AudioRecord 的方法里显式检查；
+            // 另外用户也可能在点击“开始通话”之后、录音线程真正执行之前撤销权限。
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+                    != PackageManager.PERMISSION_GRANTED) {
+                if (generation == recordGeneration) {
+                    isRecording = false;
+                    notifyAudioError("未授予麦克风权限，无法开始语音通话");
+                }
+                return;
+            }
             // 厂商语音助手（com.phicomm.speaker.device）会独占麦克风阵列：若它先占用，
             // 下面的调用会一直阻塞在音频 HAL 里（并连带卡住 AudioFlinger 输出）。
             // 先留日志，便于定位“录音线程一直没动静”的场景。
