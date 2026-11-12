@@ -16,7 +16,7 @@
     <string name="auto_start">应用启动后自动连接并开始对话</string>
     <string name="auto_start_hint">适用于无触摸屏的音箱/盒子设备：应用启动后自动连接服务器并进入语音对话状态（相当于自动点击“连接”和“开始聊天”）。</string>
     <string name="boot_auto_start">开机自动启动应用</string>
-    <string name="boot_auto_start_hint">盒子重启后自动打开应用，与上面的“自动连接”互不影响。电脑端脚本的“打开/退出”不会修改这个开关。</string>
+    <string name="boot_auto_start_hint">默认关闭。开启后盒子重启会自动打开应用，与上面的“自动连接”互不影响。电脑端脚本的“打开/退出”不会修改这个开关。</string>
     <string name="connection_status">连接状态：%s</string>
     <string name="status_connected">已连接</string>
     <string name="status_disconnected">未连接</string>

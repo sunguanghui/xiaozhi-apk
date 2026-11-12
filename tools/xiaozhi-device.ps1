@@ -10,12 +10,16 @@
     的 app_process 方式（该固件的 adb shell 会拦截 pm/am 命令）完成以下操作：
 
       menu       （默认）交互菜单，适合双击 .bat 使用
-      install    安装 APK（保留数据：已绑定的设备无需重新绑定）
-                 默认使用与脚本同目录的 app-debug.apk，可用 -Apk 指定其他文件
+      install    安装 APK：先检查设备上是否已安装，已安装则先卸载再装
+                 （应用数据会清除，绑定信息在服务端、重装无需重新绑定）；
+                 安装完成后自动打开应用（自动连接、进入语音对话）
+                 APK 文件名不限：默认优先用同目录的 app-debug.apk；
+                 目录里只有一个 .apk 时自动用它；有多个时用 -Apk 指定
       start      打开应用：自动连接、自动进入语音对话、占用麦克风
       stop       退出应用：断开连接、释放麦克风并结束进程（不改动开机自启设置）
+                 对话中对盒子说“退出小智”会触发同样的退出
       boot-on    开启开机自启（盒子重启后自动打开应用）
-      boot-off   关闭开机自启
+      boot-off   关闭开机自启（默认关闭：开机后不会自动打开应用）
       status     查看应用是否在运行、开机自启状态，并输出最近的日志
       uninstall  卸载应用
 
@@ -51,12 +55,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# 应用日志文件是 UTF-8，而 PowerShell 5.1 默认按控制台代码页（中文系统为 GBK）
+# 解码外部命令输出，会把 status 里的中文日志显示成乱码；这里显式按 UTF-8 解码。
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false) } catch { }
+
 $scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 
-# 默认 APK 与脚本放在同一目录
-if (-not $Apk) {
-    $Apk = Join-Path $scriptRoot 'app-debug.apk'
-}
+# APK 路径在 Invoke-Install 里解析：优先 app-debug.apk，其次目录里唯一的 .apk
 
 $Package   = 'com.lhht.xiaozhi.ai'
 $VendorApp = 'com.phicomm.speaker.device'   # 厂商语音助手，会独占麦克风
@@ -187,27 +192,86 @@ function Wait-AppLogPattern {
 
 # ── 命令实现 ─────────────────────────────────────────────────────────────────
 
-function Invoke-Install {
-    if (-not (Test-Path $Apk)) {
-        throw "APK 不存在：$Apk。请把 app-debug.apk 放到脚本同一目录，或用 -Apk 指定路径。"
+# 该固件对不存在的包执行 uninstall 会返回 DELETE_FAILED_INTERNAL_ERROR，
+# 所以卸载前先用 pm list packages 确认是否装了。
+function Test-PackageInstalled {
+    $pattern = "(?m)^package:$([regex]::Escape($Package))\s*$"
+    for ($i = 1; $i -le 2; $i++) {
+        $lines = (Invoke-DevicePm @('list', 'packages', $Package)) -join "`n"
+        if ($lines -match $pattern) { return $true }
+        # pm 服务偶尔会短暂不可用（error: closed），再试一次
+        if ($lines -match 'error:') { Start-Sleep -Milliseconds 800; continue }
+        return $false
     }
+    return $false
+}
+
+# APK 文件名不固定：-Apk 指定 > 同目录 app-debug.apk > 同目录唯一的 .apk
+function Resolve-ApkPath {
+    if ($Apk) {
+        if (-not (Test-Path $Apk)) {
+            throw "APK 不存在：$Apk"
+        }
+        return (Resolve-Path $Apk).Path
+    }
+    $preferred = Join-Path $scriptRoot 'app-debug.apk'
+    if (Test-Path $preferred) {
+        return $preferred
+    }
+    $found = @(Get-ChildItem -LiteralPath $scriptRoot -Filter '*.apk' -File -ErrorAction SilentlyContinue)
+    if ($found.Count -eq 1) {
+        return $found[0].FullName
+    }
+    if ($found.Count -gt 1) {
+        $names = ($found | ForEach-Object { $_.Name }) -join '、'
+        throw "脚本目录里有多个 APK（$names），请用 -Apk 指定要安装的文件。"
+    }
+    throw "APK 不存在：$preferred。请把 APK 放到脚本同一目录，或用 -Apk 指定路径。"
+}
+
+function Invoke-Install {
+    $apkPath = Resolve-ApkPath
+
     # 应用正在占用麦克风时直接覆盖安装会被系统强杀进程，音频 HAL 可能卡死到下次重启。
     # 先走正常退出流程释放资源，再安装。
     if (Get-AppProcessId) {
         Write-Host '[install] 应用正在运行，先退出并释放麦克风...'
         Invoke-Stop
     }
-    Write-Host "[install] 推送 APK: $Apk"
-    $push = Invoke-Adb push $Apk /data/local/tmp/app-debug.apk
+
+    # 安装前先检查设备上有没有这个包：有就卸载，没有就跳过卸载。
+    # 该固件对不存在的包执行 uninstall 会返回 DELETE_FAILED_INTERNAL_ERROR，
+    # 因此不能靠卸载结果判断，必须先查包。
+    # 卸载只清应用数据（设置项恢复默认）；绑定信息保存在服务端、按设备识别，重装无需重新绑定。
+    if (Test-PackageInstalled) {
+        Write-Host '[install] 检测到设备上已有旧版本，开始卸载（应用数据会清除，绑定信息不受影响）...'
+        $uninstall = ((Invoke-DevicePm @('uninstall', $Package)) |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ }) -join ' '
+        if ($uninstall -notmatch 'Success') {
+            throw "卸载旧版本失败：$uninstall"
+        }
+        Write-Host '[install] 旧版本已卸载。'
+    } else {
+        Write-Host '[install] 设备上没有旧版本，直接安装。'
+    }
+
+    Write-Host "[install] 推送 APK: $apkPath"
+    $push = Invoke-Adb push $apkPath /data/local/tmp/app-debug.apk
     if (($push -join "`n") -notmatch '1 file pushed') {
         throw ("推送失败：" + ($push -join "`n"))
     }
-    Write-Host '[install] 安装中（保留应用数据）...'
-    $result = (Invoke-DevicePm @('install', '-r', '/data/local/tmp/app-debug.apk')) -join "`n"
+    Write-Host '[install] 安装中...'
+    $result = (Invoke-DevicePm @('install', '/data/local/tmp/app-debug.apk')) -join "`n"
     if ($result -notmatch 'Success') {
         throw "安装失败：$result"
     }
-    Write-Host '[install] 安装成功。执行 start 打开应用；已绑定的设备无需重新绑定。'
+    if (-not (Test-PackageInstalled)) {
+        throw '安装命令返回成功，但没有在设备上查到该应用，请重试或检查盒子存储空间。'
+    }
+    Write-Host '[install] 安装成功，正在自动打开应用...'
+    # 装完直接拉起：自动连接并进入语音对话（等同于执行 start）
+    Invoke-Start
 }
 
 function Invoke-Start {
@@ -227,11 +291,26 @@ function Invoke-Start {
     }
 
     Write-Host '[start] 等待应用连接并打开麦克风（最多 60 秒）...'
-    $ok = Wait-AppLogPattern '自动开始语音对话' $since 60
-    $tail = (Get-AppLog 15) -join "`n"
+    # 已绑定设备会出现“自动开始语音对话”；未绑定设备会收到 bind 消息并语音播报绑定码，
+    # 两种情况都算启动成功，不必等满 60 秒。
+    $ok = Wait-AppLogPattern '自动开始语音对话|"type":"bind"' $since 60
+    # 输出最近的日志便于排查；过滤掉 token、设备 ID 等敏感内容（与 status 一致）
+    $tail = @(Get-AppLog 15 |
+        Where-Object { $_ -notmatch 'OTA 响应|Body=|Device-Id=|Client-Id=|WS Token|携带 Authorization|deviceId=|clientId=' }) -join "`n"
     Write-Host $tail
     if ($ok) {
-        Write-Host '[start] 已连接并自动进入语音对话。'
+        $new = @(Get-AppLog 200 | Where-Object {
+            if (-not $since) { return $true }
+            if ($_ -match '^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})') {
+                return ($Matches[1] -gt $since)
+            }
+            return $false
+        }) -join "`n"
+        if ($new -match '"type":"bind"') {
+            Write-Host '[start] 设备尚未绑定：应用正在语音播报 6 位绑定码，请到 xiaozhi.me 绑定。'
+        } else {
+            Write-Host '[start] 已连接并自动进入语音对话。'
+        }
     } else {
         Write-Host '[start] 60 秒内没看到“自动开始语音对话”，请检查上面的日志（可能是网络未就绪）。'
     }
@@ -301,18 +380,22 @@ function Invoke-Status {
     } elseif ($boot -eq $false) {
         Write-Host '[status] 开机自启：关闭'
     } else {
-        Write-Host '[status] 开机自启：未设置（默认开启）'
+        Write-Host '[status] 开机自启：未设置（默认关闭）'
     }
     $vendorPid = ((Invoke-Adb shell ps) -join "`n") -match 'com\.phicomm\.speaker\.device'
     if ($vendorPid) { Write-Host '[status] 厂商语音助手正在运行' }
     Write-Host '[status] 最近日志：'
     (Get-AppLog 40) |
-        Where-Object { $_ -notmatch 'OTA 响应|Body=|Device-Id=|Client-Id=|WS Token|携带 Authorization' } |
+        Where-Object { $_ -notmatch 'OTA 响应|Body=|Device-Id=|Client-Id=|WS Token|携带 Authorization|deviceId=|clientId=' } |
         Select-Object -Last 15 |
         ForEach-Object { Write-Host "        $_" }
 }
 
 function Invoke-Uninstall {
+    if (-not (Test-PackageInstalled)) {
+        Write-Host '[uninstall] 设备上没有安装该应用，无需卸载。'
+        return
+    }
     if (Get-AppProcessId) {
         Write-Host '[uninstall] 应用正在运行，先退出并释放麦克风...'
         Invoke-Stop
@@ -344,7 +427,7 @@ function Show-Menu {
     Write-Host '=============================================='
     Write-Host '  小智盒子控制台'
     Write-Host '=============================================='
-    Write-Host '   1. 安装应用            install'
+    Write-Host '   1. 安装应用            install（装完自动打开）'
     Write-Host '   2. 打开应用            start   （自动连接 + 开始对话）'
     Write-Host '   3. 退出应用            stop    （释放麦克风）'
     Write-Host '   4. 开机自启：开启      boot-on'
@@ -375,6 +458,11 @@ function Start-MenuLoop {
         $action = Show-Menu
         if (-not $action) { return }
         if ($action -eq 'menu') { continue }
+        if ($action -eq 'install') {
+            # 安装会先卸载旧版本，应用设置（含开机自启）会恢复默认，菜单里再确认一次
+            $ok = Read-Host '安装会先卸载旧版本并清除应用数据（绑定信息不受影响，设置恢复默认），输入 y 继续'
+            if ($ok -notmatch '^[yY]') { Write-Host '已取消。'; continue }
+        }
         Invoke-Action $action
         Write-Host ''
         Read-Host '按回车返回菜单（Ctrl+C 退出）' | Out-Null

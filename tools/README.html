@@ -1,0 +1,1063 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小智盒子控制工具</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23121c19'/><path d='M8 10l6 6-6 6' fill='none' stroke='%235fd3c2' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/><path d='M16 22h8' stroke='%235fd3c2' stroke-width='2.5' stroke-linecap='round'/></svg>">
+<meta name="description" content="小智盒子（Phicomm R1）控制脚本的安装、打开、退出、卸载操作说明。">
+<style>
+/* ── 设计令牌 ───────────────────────────────────────────────────────────────
+   版式：左侧编号目录 + 右侧文档流；标题区是一张控制台质感的卡片，
+   命令片段统一用深色终端块，强调“在电脑上操作盒子”的语境。 */
+:root {
+  --bg: #f2f5f3;
+  --surface: #ffffff;
+  --surface-2: #eaf0ed;
+  --fg: #14201c;
+  --muted: #566761;
+  --border: #d7e1dc;
+  --accent: #0b6b5f;
+  --accent-soft: #dcefeb;
+  --warn: #9a4f16;
+  --warn-soft: #fbeedd;
+  --code-bg: #121c19;
+  --code-fg: #dbe9e4;
+  --shadow: 0 1px 2px rgba(20, 32, 28, .05), 0 10px 28px -16px rgba(20, 32, 28, .28);
+  --font-body: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --font-display: var(--font-body);
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1412;
+    --surface: #151d1a;
+    --surface-2: #1b2521;
+    --fg: #e3ece8;
+    --muted: #9bada6;
+    --border: #2a3731;
+    --accent: #5fd3c2;
+    --accent-soft: #123029;
+    --warn: #f0b27a;
+    --warn-soft: #2e2114;
+    --code-bg: #0a1110;
+    --code-fg: #d3e5df;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 30px -16px rgba(0, 0, 0, .8);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0e1412;
+  --surface: #151d1a;
+  --surface-2: #1b2521;
+  --fg: #e3ece8;
+  --muted: #9bada6;
+  --border: #2a3731;
+  --accent: #5fd3c2;
+  --accent-soft: #123029;
+  --warn: #f0b27a;
+  --warn-soft: #2e2114;
+  --code-bg: #0a1110;
+  --code-fg: #d3e5df;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 30px -16px rgba(0, 0, 0, .8);
+  color-scheme: dark;
+}
+
+/* ── 基础 ─────────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+body {
+  margin: 0;
+  padding-block: 32px 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+.frame {
+  max-width: 1160px;
+  margin: 0 auto;
+}
+
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+}
+.skip:focus {
+  left: 8px;
+  top: 8px;
+  z-index: 10;
+  background: var(--surface);
+  color: var(--fg);
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+/* ── 标题区 ───────────────────────────────────────────────────────────────── */
+.hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  padding: clamp(24px, 4.4vw, 44px);
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  right: -90px;
+  top: -140px;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-soft) 0%, transparent 68%);
+  pointer-events: none;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-family: var(--font-mono);
+  font-size: .72rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.eyebrow::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.hero h1 {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5.4vw, 3.1rem);
+  font-weight: 750;
+  line-height: 1.12;
+  letter-spacing: -.015em;
+  text-wrap: balance;
+}
+
+.lede {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--muted);
+  font-size: 1.03rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chips li {
+  font-family: var(--font-mono);
+  font-size: .74rem;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 11px;
+}
+
+/* ── 核心操作卡片 ─────────────────────────────────────────────────────────── */
+.quick {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-block: 18px 40px;
+}
+
+.quick .card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 15px 16px 14px;
+}
+
+.quick h3 {
+  margin: 0;
+  font-size: .92rem;
+  font-weight: 650;
+}
+
+.quick .card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: .82rem;
+  line-height: 1.6;
+}
+
+.quick .card code {
+  font-family: var(--font-mono);
+  font-size: .76rem;
+  line-height: 1.5;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 7px;
+  overflow-wrap: anywhere;
+}
+
+/* ── 目录与正文两栏 ───────────────────────────────────────────────────────── */
+.shell {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  gap: 52px;
+  align-items: start;
+  margin-bottom: 72px;
+}
+
+.toc {
+  position: sticky;
+  top: 24px;
+  min-width: 0;
+  font-size: .9rem;
+}
+
+.toc-title {
+  margin: 0 0 10px;
+  font-family: var(--font-mono);
+  font-size: .7rem;
+  letter-spacing: .18em;
+  color: var(--muted);
+}
+
+.toc ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-left: 1px solid var(--border);
+}
+
+.toc a {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 4px 6px 14px;
+  margin-left: -1px;
+  border-left: 2px solid transparent;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.toc a:hover { color: var(--fg); }
+
+.toc a.active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  font-weight: 600;
+}
+
+.toc a .n {
+  font-family: var(--font-mono);
+  font-size: .7rem;
+  opacity: .65;
+}
+
+/* ── 正文 ─────────────────────────────────────────────────────────────────── */
+article { min-width: 0; }
+
+article section {
+  padding-block: 30px;
+  border-top: 1px solid var(--border);
+}
+
+article section:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+article h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 0 14px;
+  font-family: var(--font-display);
+  font-size: clamp(1.3rem, 2.6vw, 1.6rem);
+  font-weight: 700;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+article h2 .num {
+  font-family: var(--font-mono);
+  font-size: .78rem;
+  font-weight: 500;
+  letter-spacing: .06em;
+  color: var(--accent);
+}
+
+article h3 {
+  margin: 26px 0 10px;
+  font-size: 1.02rem;
+  font-weight: 650;
+}
+
+article p {
+  margin: 0 0 14px;
+  max-width: 68ch;
+}
+
+article ul, article ol {
+  max-width: 68ch;
+  margin: 0 0 14px;
+  padding-left: 1.3em;
+}
+
+article li { margin-bottom: 5px; }
+article li:last-child { margin-bottom: 0; }
+
+strong { font-weight: 650; }
+
+/* 行内代码 */
+code {
+  font-family: var(--font-mono);
+  font-size: .86em;
+  color: var(--fg);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: .08em .35em;
+  overflow-wrap: anywhere;
+}
+
+/* 命令行块 */
+.cmd {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0;
+  padding: 9px 10px 9px 14px;
+  background: var(--code-bg);
+  color: var(--code-fg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow-x: auto;
+}
+
+.cmd code {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: .87rem;
+  white-space: nowrap;
+}
+
+.cmd .copy {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: .7rem;
+  color: var(--code-fg);
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 6px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+
+.cmd .copy:hover { background: rgba(255, 255, 255, .16); }
+
+/* 终端输出块 */
+.block-label {
+  margin: 18px 0 8px;
+  font-family: var(--font-mono);
+  font-size: .72rem;
+  letter-spacing: .1em;
+  color: var(--muted);
+}
+
+.term {
+  margin: 0 0 16px;
+  padding: 15px 16px;
+  background: var(--code-bg);
+  color: var(--code-fg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: .8rem;
+  line-height: 1.7;
+  tab-size: 2;
+}
+
+/* 表格 */
+.tablewrap {
+  margin: 16px 0 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: .9rem;
+}
+
+th, td {
+  text-align: left;
+  vertical-align: top;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: .76rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+
+tr:last-child td { border-bottom: 0; }
+
+td code { white-space: nowrap; }
+
+/* 提示块 */
+.callout {
+  margin: 20px 0;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+}
+
+.callout.warn {
+  background: var(--warn-soft);
+  border-left-color: var(--warn);
+}
+
+.callout .callout-title {
+  margin: 0 0 6px;
+  font-weight: 650;
+  color: var(--fg);
+}
+
+.callout.warn .callout-title { color: var(--warn); }
+
+.callout p {
+  margin: 0;
+  max-width: 66ch;
+}
+
+.callout p + p { margin-top: 8px; }
+
+/* 步骤 */
+.steps {
+  list-style: none;
+  counter-reset: step;
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+  max-width: none;
+}
+
+.steps > li {
+  position: relative;
+  min-width: 0;
+  padding: 15px 18px 15px 56px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.steps > li::before {
+  counter-increment: step;
+  content: counter(step, decimal-leading-zero);
+  position: absolute;
+  left: 17px;
+  top: 16px;
+  font-family: var(--font-mono);
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.steps h3 {
+  margin: 0 0 6px;
+  font-size: .98rem;
+}
+
+.steps p {
+  margin: 0;
+  max-width: 66ch;
+  color: var(--muted);
+  font-size: .92rem;
+}
+
+.steps p strong { color: var(--fg); }
+
+.steps .cmd { background: var(--code-bg); }
+
+/* FAQ */
+.faq {
+  margin-bottom: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.faq summary {
+  position: relative;
+  padding: 12px 46px 12px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.faq summary::-webkit-details-marker { display: none; }
+
+.faq summary::after {
+  content: "+";
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.faq[open] summary::after { content: "−"; }
+
+.faq summary:hover { background: var(--surface-2); border-radius: 10px; }
+
+.faq .faq-body {
+  padding: 0 16px 14px;
+  font-size: .93rem;
+  color: var(--muted);
+}
+
+.faq .faq-body p { margin: 0; max-width: 66ch; }
+.faq .faq-body p + p { margin-top: 8px; }
+
+/* 页脚 */
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding-block: 22px 40px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: .8rem;
+}
+
+.footer span { font-family: var(--font-mono); font-size: .74rem; }
+
+/* 焦点 */
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── 响应式 ───────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .quick { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 860px) {
+  .shell {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    margin-bottom: 48px;
+  }
+  .toc {
+    position: static;
+    margin-bottom: 4px;
+  }
+  .toc-title { display: none; }
+  .toc ol {
+    flex-direction: row;
+    gap: 2px;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    border-left: 0;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+  }
+  .toc a {
+    white-space: nowrap;
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+    padding: 5px 10px;
+    margin-left: 0;
+  }
+  .toc a.active {
+    border-left: 0;
+    border-bottom-color: var(--accent);
+  }
+  .toc a .n { display: none; }
+}
+
+@media (max-width: 640px) {
+  .tablewrap {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow-x: visible;
+  }
+  table {
+    min-width: 0;
+    font-size: .9rem;
+  }
+  thead { display: none; }
+  tbody, tr, td { display: block; }
+  tr {
+    margin-bottom: 10px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  tr:last-child { margin-bottom: 0; }
+  td {
+    padding: 3px 0;
+    border: 0;
+  }
+  td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 1px;
+    font-size: .7rem;
+    letter-spacing: .06em;
+    color: var(--muted);
+  }
+  td:first-child { font-weight: 600; }
+  td code { white-space: normal; overflow-wrap: anywhere; }
+}
+
+@media (max-width: 520px) {
+  body { padding-block: 20px 0; }
+  .quick { grid-template-columns: 1fr; }
+  article section { padding-block: 24px; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">跳到正文</a>
+
+<div class="frame">
+  <header class="hero">
+    <p class="eyebrow">tools / 本地运维脚本</p>
+    <h1>小智盒子控制工具</h1>
+    <p class="lede">在电脑上通过 adb 控制盒子上应用的安装、打开、退出与卸载。整个 <code>tools</code> 目录拷贝到任意电脑、任意路径都能用，不依赖 Android 源码工程。</p>
+    <ul class="chips">
+      <li>PowerShell 5.1+</li>
+      <li>Android 5.1.1 实测</li>
+      <li>adb 已内置</li>
+    </ul>
+  </header>
+
+  <div class="quick">
+    <div class="card">
+      <h3>安装</h3>
+      <code>.\xiaozhi-device.bat install</code>
+      <p>装完自动打开，绑定信息不受影响</p>
+    </div>
+    <div class="card">
+      <h3>打开</h3>
+      <code>.\xiaozhi-device.bat start</code>
+      <p>自动连接、开始对话、占用麦克风</p>
+    </div>
+    <div class="card">
+      <h3>退出</h3>
+      <code>.\xiaozhi-device.bat stop</code>
+      <p>断开连接、释放麦克风、结束进程</p>
+    </div>
+    <div class="card">
+      <h3>卸载</h3>
+      <code>.\xiaozhi-device.bat uninstall</code>
+      <p>先退出再卸载，应用数据一并清除</p>
+    </div>
+  </div>
+
+  <div class="shell">
+    <nav class="toc" aria-label="目录">
+      <p class="toc-title">目录</p>
+      <ol>
+        <li><a href="#files"><span class="n">01</span>目录内容</a></li>
+        <li><a href="#prepare"><span class="n">02</span>准备工作</a></li>
+        <li><a href="#usage"><span class="n">03</span>开始使用</a></li>
+        <li><a href="#commands"><span class="n">04</span>命令说明</a></li>
+        <li><a href="#flows"><span class="n">05</span>典型流程</a></li>
+        <li><a href="#switches"><span class="n">06</span>两个自动开关</a></li>
+        <li><a href="#faq"><span class="n">07</span>常见问题</a></li>
+        <li><a href="#security"><span class="n">08</span>安全说明</a></li>
+      </ol>
+    </nav>
+
+    <article id="main">
+      <section id="files">
+        <h2><span class="num">01</span>目录内容</h2>
+        <p>所有文件放在同一目录，脚本按相对路径查找 APK 与 adb。</p>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th scope="col">文件</th><th scope="col">作用</th></tr>
+            </thead>
+            <tbody>
+              <tr><td data-label="文件"><code>xiaozhi-device.bat</code></td><td data-label="作用">双击打开菜单；也可在命令行带参数调用</td></tr>
+              <tr><td data-label="文件"><code>xiaozhi-device.ps1</code></td><td data-label="作用">主脚本（Windows 自带 PowerShell 5.1 即可）</td></tr>
+              <tr><td data-label="文件"><code>app-debug.apk</code></td><td data-label="作用">要安装到盒子的应用，<strong>与脚本放在同一目录</strong>；文件名不限，见下方说明</td></tr>
+              <tr><td data-label="文件"><code>platform-tools\</code>（可选）</td><td data-label="作用">已随目录附带 <code>adb.exe</code> 及其 DLL，无需另外安装 Android SDK；也可以直接把 <code>adb.exe</code> 放在本目录</td></tr>
+              <tr><td data-label="文件"><code>README.html</code></td><td data-label="作用">同一份说明的网页版，双击用浏览器打开，离线可用</td></tr>
+              <tr><td data-label="文件"><code>.gitignore</code></td><td data-label="作用">排除 <code>*.apk</code> 与 <code>platform-tools</code>，避免构建产物和第三方二进制进版本库</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>脚本查找 adb 的顺序：<code>本目录\adb.exe</code> → <code>本目录\platform-tools\adb.exe</code> → 环境变量 <code>ADB</code> → 本机 Android SDK → <code>PATH</code>。正常情况会命中随目录附带的版本。</p>
+        <p>脚本查找 APK 的规则：<code>-Apk</code> 参数指定 → 本目录的 <code>app-debug.apk</code> → 本目录里<strong>唯一</strong>的 <code>.apk</code>（叫什么都行，比如 <code>R1Xiaozhi.apk</code>）。目录里有多个 <code>.apk</code> 时必须用 <code>-Apk</code> 指定，避免装错文件。</p>
+      </section>
+
+      <section id="prepare">
+        <h2><span class="num">02</span>准备工作</h2>
+        <ol class="steps">
+          <li>
+            <h3>连到同一局域网</h3>
+            <p>盒子与电脑连在<strong>同一局域网</strong>，盒子已开启 ADB 调试（本设备监听 <code>5555</code> 端口）。</p>
+          </li>
+          <li>
+            <h3>记住盒子的 IP</h3>
+            <p>在路由器后台或盒子设置里查看，例如 <code>192.168.1.20</code>。每次运行脚本都会先问这个地址。</p>
+          </li>
+          <li>
+            <h3>确认 PowerShell 可用</h3>
+            <p>Windows 10/11 自带 PowerShell 即可，无需另外安装。</p>
+          </li>
+        </ol>
+      </section>
+
+      <section id="usage">
+        <h2><span class="num">03</span>开始使用</h2>
+
+        <h3>方式一：双击 <code>xiaozhi-device.bat</code></h3>
+        <p>先按提示填写盒子 IP，然后出现菜单，输入序号执行；执行完可按回车回到菜单继续操作，输入 <code>0</code> 退出。选 <code>1</code>（安装）时会先提示“会卸载旧版本并清除应用数据”，输入 <code>y</code> 确认后才开始。</p>
+        <p class="block-label">运行后看到的内容</p>
+        <pre class="term">请先填写盒子的 IP 地址（后续所有操作都在这台设备上执行）。
+设备 IP（例如 192.168.1.20）: 192.168.1.20
+==============================================
+  小智盒子控制台
+==============================================
+   1. 安装应用            install（装完自动打开）
+   2. 打开应用            start   （自动连接 + 开始对话）
+   3. 退出应用            stop    （释放麦克风）
+   4. 开机自启：开启      boot-on
+   5. 开机自启：关闭      boot-off
+   6. 查看状态            status
+   7. 卸载应用            uninstall
+   0. 退出</pre>
+
+        <h3>方式二：命令行（在本目录下执行）</h3>
+        <div class="cmd">
+          <code>.\xiaozhi-device.bat start</code>
+          <button class="copy" type="button" data-copy=".\xiaozhi-device.bat start">复制</button>
+        </div>
+        <div class="cmd">
+          <code>.\xiaozhi-device.bat status -Device 192.168.1.20</code>
+          <button class="copy" type="button" data-copy=".\xiaozhi-device.bat status -Device 192.168.1.20">复制</button>
+        </div>
+
+        <h3>关于 IP 输入</h3>
+        <ul>
+          <li>只填 IP 会自动补上 <code>:5555</code> 端口；也可以直接填 <code>192.168.1.20:5555</code></li>
+          <li>不填直接回车会取消本次操作，不会对设备做任何事</li>
+          <li>加 <code>-Device</code> 参数可跳过输入</li>
+        </ul>
+        <p>首次连接时盒子会弹出“允许 USB 调试”之类的授权框，同意一次即可。</p>
+      </section>
+
+      <section id="commands">
+        <h2><span class="num">04</span>命令说明</h2>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th scope="col">命令</th><th scope="col">作用</th><th scope="col">说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td data-label="命令"><code>menu</code></td><td data-label="作用">交互菜单（默认）</td><td data-label="说明">不带参数运行脚本时进入；双击 <code>.bat</code> 即为此模式</td></tr>
+              <tr><td data-label="命令"><code>install</code></td><td data-label="作用">安装并打开应用</td><td data-label="说明"><strong>先检查设备上是否已安装，已安装则先卸载再安装</strong>。卸载会清除应用数据（设置恢复默认），但绑定信息保存在服务端、按设备识别，<strong>重装后无需重新绑定</strong>；应用在运行时会先正常退出；APK 文件名不限；<strong>安装成功后自动打开应用</strong>（自动连接、进入语音对话）</td></tr>
+              <tr><td data-label="命令"><code>start</code></td><td data-label="作用">打开应用</td><td data-label="说明">自动连接服务器、自动开始语音对话、占用麦克风；会先停掉厂商语音助手以释放麦克风</td></tr>
+              <tr><td data-label="命令"><code>stop</code></td><td data-label="作用">退出应用</td><td data-label="说明">断开连接、释放麦克风、结束进程；<strong>不修改开机自启设置</strong></td></tr>
+              <tr><td data-label="命令"><code>boot-on</code></td><td data-label="作用">开启开机自启</td><td data-label="说明">盒子重启后自动打开应用</td></tr>
+              <tr><td data-label="命令"><code>boot-off</code></td><td data-label="作用">关闭开机自启</td><td data-label="说明">盒子重启后不会自动打开应用</td></tr>
+              <tr><td data-label="命令"><code>status</code></td><td data-label="作用">查看状态</td><td data-label="说明">应用是否在运行、界面是否打开、开机自启状态、厂商助手是否在运行、最近日志</td></tr>
+              <tr><td data-label="命令"><code>uninstall</code></td><td data-label="作用">卸载应用</td><td data-label="说明">先正常退出再卸载；<strong>应用数据（设置、本地配置）会一起清除</strong>，绑定信息在服务端，重新安装后仍然有效</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>可选参数：<code>-Device &lt;IP[:端口]&gt;</code>、<code>-Apk &lt;APK路径&gt;</code>、<code>-Adb &lt;adb.exe路径&gt;</code>。</p>
+
+        <aside class="callout">
+          <p class="callout-title">对话中语音退出</p>
+          <p>和小智聊天时说出“<strong>退出小智</strong>”，应用会在助手回复播完后自动退出并释放麦克风（效果等同 <code>stop</code>）；服务端没有回复时最多等 8 秒。文字输入“退出小智”同样有效。</p>
+        </aside>
+
+        <aside class="callout warn">
+          <p class="callout-title">不要用任务管理器强杀应用</p>
+          <p>应用正在录音时强杀进程，可能让这台盒子的音频服务卡死，之后谁都无法使用麦克风，只能重启盒子恢复。退出请用 <code>stop</code>；<code>install</code> / <code>uninstall</code> 内部也是先正常退出再操作。</p>
+        </aside>
+      </section>
+
+      <section id="flows">
+        <h2><span class="num">05</span>典型流程</h2>
+        <ol class="steps">
+          <li>
+            <h3>首次部署到一台新盒子</h3>
+            <div class="cmd">
+              <code>.\xiaozhi-device.bat install</code>
+              <button class="copy" type="button" data-copy=".\xiaozhi-device.bat install">复制</button>
+            </div>
+            <p>安装完成后会自动打开应用并连接，不需要再执行 <code>start</code>；没有绑定的设备会<strong>语音播报 6 位绑定码</strong>，到 <a href="https://xiaozhi.me" target="_blank" rel="noreferrer">xiaozhi.me</a> 输入该码完成绑定，之后每次 <code>start</code>（或 <code>install</code>）即可直接对话。</p>
+          </li>
+          <li>
+            <h3>日常使用</h3>
+            <p>需要时 <code>start</code>，不需要时 <code>stop</code>——麦克风只在 <code>start</code> 期间被占用。</p>
+          </li>
+          <li>
+            <h3>升级应用</h3>
+            <p>用新的 APK 替换目录里的旧文件（文件名可以不同，例如 <code>R1Xiaozhi-v1.0.1.apk</code>；目录里只留一个 <code>.apk</code> 时会自动用它），执行 <code>install</code>，装完会自动打开应用。</p>
+            <p><code>install</code> 会<strong>先卸载旧版本</strong>，应用数据（设置、本地配置）会一起清除，但<strong>绑定信息保存在服务端、按设备识别，重装后无需重新绑定</strong>，安装完成会自动打开并继续使用。</p>
+            <p>注意设置项会恢复默认：开机自启默认关闭，需要的话重新执行 <code>boot-on</code>。</p>
+          </li>
+          <li>
+            <h3>换一台盒子</h3>
+            <p>直接运行脚本，填写新盒子的 IP 即可。绑定信息跟随设备（不同盒子需要各自绑定）。</p>
+          </li>
+          <li>
+            <h3>不再使用</h3>
+            <div class="cmd">
+              <code>.\xiaozhi-device.bat stop</code>
+              <button class="copy" type="button" data-copy=".\xiaozhi-device.bat stop">复制</button>
+            </div>
+            <div class="cmd">
+              <code>.\xiaozhi-device.bat uninstall</code>
+              <button class="copy" type="button" data-copy=".\xiaozhi-device.bat uninstall">复制</button>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section id="switches">
+        <h2><span class="num">06</span>两个“自动”开关的区别</h2>
+        <p>应用设置页里有两个独立开关，脚本操作也对应分开：</p>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th scope="col">开关</th><th scope="col">设置键</th><th scope="col">作用</th><th scope="col">由谁修改</th></tr>
+            </thead>
+            <tbody>
+              <tr><td data-label="开关">应用启动后自动连接并开始对话</td><td data-label="设置键"><code>auto_start</code></td><td data-label="作用">应用被打开后是否自动连接、自动开麦</td><td data-label="由谁修改"><code>start</code> 会确保它打开；应用设置页</td></tr>
+              <tr><td data-label="开关">开机自动启动应用</td><td data-label="设置键"><code>boot_auto_start</code></td><td data-label="作用">盒子重启后是否自动打开应用</td><td data-label="由谁修改"><code>boot-on</code> / <code>boot-off</code>；应用设置页</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <aside class="callout">
+          <p>开机自启<strong>默认关闭</strong>：新装或清除数据后，盒子重启不会自动打开应用，需要时用 <code>start</code> 拉起。<code>start</code> / <code>stop</code> 都<strong>不会</strong>修改“开机自启”；如果想让盒子每次开机就自动进入对话，执行 <code>boot-on</code>。</p>
+        </aside>
+      </section>
+
+      <section id="faq">
+        <h2><span class="num">07</span>常见问题</h2>
+
+        <details class="faq">
+          <summary>找不到 adb</summary>
+          <div class="faq-body">
+            <p>本目录已附带 <code>platform-tools\adb.exe</code>，正常不会出现这个问题。如果手动删除或替换过，注意 <code>adb.exe</code> 必须和 <code>AdbWinApi.dll</code>、<code>AdbWinUsbApi.dll</code> 放在一起；也可以用 <code>-Adb</code> 指定任意位置的 adb。</p>
+          </div>
+        </details>
+
+        <details class="faq">
+          <summary>设备未连接 / offline</summary>
+          <div class="faq-body">
+            <p>检查 IP 是否正确、盒子是否开机、电脑与盒子是否同网段；可先在命令行执行 <code>adb connect 192.168.1.20:5555</code> 再运行脚本。盒子重启后需要几秒网络才恢复。</p>
+          </div>
+        </details>
+
+        <details class="faq">
+          <summary>提示 APK 不存在 / 有多个 APK</summary>
+          <div class="faq-body">
+            <p>把 APK 放到脚本同目录（文件名不限，<code>app-debug.apk</code> 只是默认优先项），或用 <code>-Apk</code> 指定完整路径。目录里有多个 <code>.apk</code> 时脚本不会猜，必须用 <code>-Apk</code> 指定要安装的那一个。</p>
+          </div>
+        </details>
+
+        <details class="faq">
+          <summary><code>start</code> 后没有反应 / 不说话</summary>
+          <div class="faq-body">
+            <p>先跑 <code>status</code> 看最近日志。常见原因：网络未就绪（应用会自动重试）、盒子还没绑定、厂商语音助手占着麦克风（脚本已自动 <code>force-stop</code> 它）。</p>
+          </div>
+        </details>
+
+        <details class="faq">
+          <summary>应用没在跑，但 <code>status</code> 显示“只有空闲进程”</summary>
+          <div class="faq-body">
+            <p>这是开机广播留下的空进程，不占麦克风，可以忽略。</p>
+          </div>
+        </details>
+
+        <details class="faq">
+          <summary>卸载重装后要重新绑定吗</summary>
+          <div class="faq-body">
+            <p>不需要。绑定关系保存在小智服务端并关联设备 ID，卸载只会清除应用本地数据；重装后 <code>start</code> 会直接连回原设备，仍可正常对话。只有换一台盒子（新的设备 ID）才需要重新绑定。</p>
+          </div>
+        </details>
+
+        <details class="faq">
+          <summary>不要用任务管理器强杀应用</summary>
+          <div class="faq-body">
+            <p>应用正在录音时强杀进程，可能让这台盒子的音频服务卡死，之后谁都无法使用麦克风，只能重启盒子恢复。退出请用 <code>stop</code>（<code>install</code> / <code>uninstall</code> 内部也是先正常退出再操作）。</p>
+          </div>
+        </details>
+
+        <details class="faq">
+          <summary>改了脚本后中文报错 / 无法解析</summary>
+          <div class="faq-body">
+            <p><code>xiaozhi-device.ps1</code> 必须保存为 <strong>UTF-8 带 BOM</strong>，否则 PowerShell 5.1 会按 GBK 读取，中文注释会导致语法错误。</p>
+          </div>
+        </details>
+
+        <details class="faq">
+          <summary>重启后应用没有自动启动</summary>
+          <div class="faq-body">
+            <p>开机自启默认是关闭的，需要先执行 <code>boot-on</code>；另外新安装的应用在 Android 里处于“停止状态”，需要先 <code>start</code> 一次（或用过应用），开机广播才会送达。</p>
+          </div>
+        </details>
+      </section>
+
+      <section id="security">
+        <h2><span class="num">08</span>安全说明</h2>
+        <ul>
+          <li>远程控制广播要求 <code>android.permission.DUMP</code> 权限，只有 adb shell、系统或特权应用能发送，普通应用无法控制本应用。</li>
+          <li>脚本只做局域网内 adb 控制，<code>status</code> 输出的日志已过滤掉 token、设备 ID 等敏感内容。</li>
+          <li>应用里保存的 WebSocket Token 已排除在云备份 / 设备迁移之外。</li>
+        </ul>
+      </section>
+    </article>
+  </div>
+
+  <footer class="footer">
+    <span>tools / xiaozhi-device</span>
+    <span>最后更新 2026-11-12</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  // 目录高亮
+  var links = {};
+  document.querySelectorAll('.toc a').forEach(function (a) {
+    links[a.getAttribute('href').slice(1)] = a;
+  });
+  var sections = document.querySelectorAll('article section[id]');
+  if (sections.length && links[sections[0].id]) {
+    links[sections[0].id].classList.add('active');
+  }
+  if ('IntersectionObserver' in window) {
+    var visible = new Set();
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) { visible.add(entry.target.id); }
+        else { visible.delete(entry.target.id); }
+      });
+      var current = null;
+      sections.forEach(function (section) {
+        if (!current && visible.has(section.id)) { current = section.id; }
+      });
+      if (current) {
+        Object.keys(links).forEach(function (id) { links[id].classList.remove('active'); });
+        links[current].classList.add('active');
+      }
+    }, { rootMargin: '-15% 0px -70% 0px' });
+    sections.forEach(function (section) { observer.observe(section); });
+  }
+
+  // 复制命令
+  document.querySelectorAll('.copy').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var text = button.getAttribute('data-copy');
+      var reset = function (label) {
+        button.textContent = label;
+        setTimeout(function () { button.textContent = '复制'; }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          reset('已复制');
+        }, function () {
+          selectCode(button, reset);
+        });
+      } else {
+        selectCode(button, reset);
+      }
+    });
+  });
+
+  function selectCode(button, reset) {
+    var code = button.parentElement.querySelector('code');
+    if (!code) { return; }
+    var selection = window.getSelection();
+    var range = document.createRange();
+    range.selectNodeContents(code);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    reset('已选中');
+  }
+})();
+</script>
+</body>
+</html>

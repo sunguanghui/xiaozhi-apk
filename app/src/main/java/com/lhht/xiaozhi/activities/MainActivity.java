@@ -9,6 +9,7 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Process;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.View;
@@ -62,6 +63,15 @@ public class MainActivity extends AppCompatActivity
     // 电脑端脚本通过 ControlReceiver 发广播控制“打开/退出”，需要找到当前界面
     private static WeakReference<MainActivity> currentRef;
 
+    // 对话中说出/输入“退出小智”后自动退出应用（无触摸屏盒子不方便操作）
+    private static final String EXIT_KEYWORD = "退出小智";
+    /** 识别到关键词后最多等这么久，避免服务端没有回复时一直不退出 */
+    private static final long EXIT_KEYWORD_MAX_WAIT_MS = 8000;
+    /** tts.stop 之后留给播放缓冲排空的时间 */
+    private static final long EXIT_AFTER_SPEECH_DELAY_MS = 1500;
+    /** 界面结束后强制结束进程的兜底延时 */
+    private static final long EXIT_KILL_DELAY_MS = 5000;
+
     /** 当前存活的界面实例（没有则为 null），供 ControlReceiver 使用。 */
     public static MainActivity getCurrent() {
         return currentRef == null ? null : currentRef.get();
@@ -77,6 +87,10 @@ public class MainActivity extends AppCompatActivity
     private static final long AUTO_CONNECT_RETRY_DELAY_MS = 8000;
     private final Handler autoRetryHandler = new Handler(Looper.getMainLooper());
     private boolean autoRetryScheduled;
+    // 关键词退出：主线程回调（WebSocket 消息已经 post 到 mainHandler）
+    private final Handler exitHandler = new Handler(Looper.getMainLooper());
+    private final Runnable exitRunnable = this::exitByKeyword;
+    private boolean exitRequested;
     private final Runnable autoRetryRunnable = new Runnable() {
         @Override
         public void run() {
@@ -834,6 +848,10 @@ public class MainActivity extends AppCompatActivity
         } else if ("stop".equals(state)) {
             addLog("Audio", "停止接收新的音频数据，等待播放缓冲区排空");
             audioEngine.endPlayback();
+            // 用户说过“退出小智”：让这句告别播完再退出
+            if (exitRequested) {
+                scheduleExitAfterSpeech();
+            }
         }
 
         if ("sentence_start".equals(state) && jsonMessage.has("text")) {
@@ -841,11 +859,56 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    /** stt → 显示用户说的话 */
+    /** stt → 显示用户说的话；说“退出小智”时自动结束本次运行 */
     private void handleStt(JSONObject jsonMessage) throws JSONException {
         if (jsonMessage.has("text")) {
-            displayMessage(jsonMessage.getString("text"), false);
+            String text = jsonMessage.getString("text");
+            displayMessage(text, false);
+            if (containsExitKeyword(text)) {
+                requestKeywordExit();
+            }
         }
+    }
+
+    /** 去掉空白和常见标点后再匹配，避免“退出 小智。”这类识别结果漏掉。 */
+    private static boolean containsExitKeyword(String text) {
+        if (text == null) return false;
+        String normalized = text.replaceAll("[\\s，。、,.!！?？~～]", "");
+        return normalized.contains(EXIT_KEYWORD);
+    }
+
+    /**
+     * 用户说了“退出小智”：先正常结束语音对话，让助手把告别语播完再退出。
+     * 服务端没有回复时用 8 秒兜底，避免一直停在等待状态。
+     */
+    private void requestKeywordExit() {
+        if (exitRequested) return;
+        exitRequested = true;
+        LogUtils.getInstance().d(this, "XiaoZhi-Control", "识别到“退出小智”，准备退出");
+        exitHandler.removeCallbacks(exitRunnable);
+        exitHandler.postDelayed(exitRunnable, EXIT_KEYWORD_MAX_WAIT_MS);
+    }
+
+    private void scheduleExitAfterSpeech() {
+        exitHandler.removeCallbacks(exitRunnable);
+        exitHandler.postDelayed(exitRunnable, EXIT_AFTER_SPEECH_DELAY_MS);
+    }
+
+    /** 走与电脑端 stop 相同的正常退出流程，并保留强杀兜底。 */
+    private void exitByKeyword() {
+        if (isFinishing() || isDestroyed()) return;
+        exitHandler.removeCallbacks(exitRunnable);
+        LogUtils.getInstance().d(this, "XiaoZhi-Control", "按关键词退出：结束界面并释放麦克风");
+        shutdownForControl();
+        // 释放流程可能卡在音频 HAL 上，到点直接结束进程（下次 start 前应用会重新拉起）
+        new Thread(() -> {
+            try {
+                Thread.sleep(EXIT_KILL_DELAY_MS);
+            } catch (InterruptedException ignored) {
+                // 仍需结束进程
+            }
+            Process.killProcess(Process.myPid());
+        }, "xiaozhi-keyword-exit").start();
     }
 
     /** 文字显示规则（参考 py-xiaozhi / xiaozhi-android）：首条消息自动展开，折叠态显示红点+抖动提示 */
@@ -1067,6 +1130,7 @@ public class MainActivity extends AppCompatActivity
         foregroundHandler.removeCallbacksAndMessages(null);
         autoRetryHandler.removeCallbacks(autoRetryRunnable);
         autoRetryScheduled = false;
+        exitHandler.removeCallbacks(exitRunnable);
         // 连接与音频资源由 SessionViewModel 持有：旋转/配置变更时继续存活，
         // 仅在 Activity 真正 finish 后由 ViewModel.onCleared() 释放。
         // Listener 必须在每次销毁时解绑，否则旧 Activity 会被回调（并泄漏），

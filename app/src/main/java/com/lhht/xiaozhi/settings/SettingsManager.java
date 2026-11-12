@@ -82,11 +82,12 @@ public class SettingsManager {
     }
 
     /**
-     * 独立开关：盒子重启后是否自动打开应用。默认开启，与 {@link #isAutoStartEnabled()}
-     * 互不影响；电脑端脚本的“打开/退出”也不会修改它。
+     * 独立开关：盒子重启后是否自动打开应用。默认关闭（按需拉起，避免开机后
+     * 一直占用麦克风），与 {@link #isAutoStartEnabled()} 互不影响；
+     * 电脑端脚本的“打开/退出”也不会修改它。
      */
     public boolean isBootAutoStartEnabled() {
-        return preferences.getBoolean(KEY_BOOT_AUTO_START, true);
+        return preferences.getBoolean(KEY_BOOT_AUTO_START, false);
     }
 
     public void setBootAutoStartEnabled(boolean enabled) {

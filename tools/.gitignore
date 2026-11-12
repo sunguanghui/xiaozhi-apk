@@ -1,2 +1,5 @@
 # 脚本目录里放的 APK 是构建产物，不进版本库
 *.apk
+
+# adb 等 Android SDK 二进制体积大、受 SDK 许可约束，随目录本地使用，不进版本库
+platform-tools/
