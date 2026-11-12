@@ -17,6 +17,10 @@ public class SettingsManager {
     private static final String KEY_CLIENT_ID = "client_id";
     private static final String KEY_SERIAL_NUMBER = "serial_number";
     private static final String KEY_ALLOW_INSECURE_TLS = "allow_insecure_tls";
+    // 开机自启 + 自动连接 + 自动进入语音对话（无触摸屏的音箱/盒子设备用）
+    private static final String KEY_AUTO_START = "auto_start";
+    // 独立开关：盒子重启后是否自动打开应用（与上面的“启动后自动连接”互不影响）
+    private static final String KEY_BOOT_AUTO_START = "boot_auto_start";
     // OTA 动态下发的 WebSocket URL 和 token
     private static final String KEY_OTA_WS_URL   = "ota_ws_url";
     private static final String KEY_OTA_TOKEN     = "ota_token";
@@ -61,6 +65,32 @@ public class SettingsManager {
 
     public void setAllowInsecureTls(boolean allow) {
         preferences.edit().putBoolean(KEY_ALLOW_INSECURE_TLS, allow).apply();
+    }
+
+    // ── 开机自启 / 自动对话 ──────────────────────────────────────────────────
+
+    /**
+     * 开机自动启动应用并自动连接、进入语音对话。
+     * 默认开启：音箱/盒子类设备通常没有触摸屏，需要开机即可直接使用。
+     */
+    public boolean isAutoStartEnabled() {
+        return preferences.getBoolean(KEY_AUTO_START, true);
+    }
+
+    public void setAutoStartEnabled(boolean enabled) {
+        preferences.edit().putBoolean(KEY_AUTO_START, enabled).apply();
+    }
+
+    /**
+     * 独立开关：盒子重启后是否自动打开应用。默认开启，与 {@link #isAutoStartEnabled()}
+     * 互不影响；电脑端脚本的“打开/退出”也不会修改它。
+     */
+    public boolean isBootAutoStartEnabled() {
+        return preferences.getBoolean(KEY_BOOT_AUTO_START, true);
+    }
+
+    public void setBootAutoStartEnabled(boolean enabled) {
+        preferences.edit().putBoolean(KEY_BOOT_AUTO_START, enabled).apply();
     }
 
     // ── 官方平台开关 ─────────────────────────────────────────────────────────

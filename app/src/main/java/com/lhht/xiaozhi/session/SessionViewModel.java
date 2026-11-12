@@ -19,6 +19,30 @@ public class SessionViewModel extends ViewModel {
 
     private WebSocketManager webSocketManager;
     private AudioEngine audioEngine;
+    /** 本次会话是否已经自动发起过连接（避免旋转屏幕后重复自动连接）。 */
+    private boolean autoConnectAttempted;
+    /**
+     * 是否处于一轮语音对话中（已发送 listen.start 且尚未 listen.stop）。
+     * 注意：自动模式下麦克风会一直保持打开，所以不能用 isRecording() 判断是否在通话。
+     */
+    private boolean callActive;
+
+    public boolean isCallActive() {
+        return callActive;
+    }
+
+    public void setCallActive(boolean active) {
+        callActive = active;
+    }
+
+    public boolean isAutoConnectAttempted() {
+        return autoConnectAttempted;
+    }
+
+    public void markAutoConnectAttempted() {
+        autoConnectAttempted = true;
+    }
+
 
     /** 只在首次创建时初始化；Activity 重建时直接复用已有实例。 */
     public synchronized void init(Context context, String deviceId, String clientId) {

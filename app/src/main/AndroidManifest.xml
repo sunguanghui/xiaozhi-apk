@@ -3,6 +3,11 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 开机自启：设备重启后自动打开应用并连接（音箱/盒子无触摸屏时必需） -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 开机后被厂商界面遮挡时，把自己的任务移回前台（无触摸设备无法手动切换） -->
+    <uses-permission android:name="android.permission.GET_TASKS" />
+    <uses-permission android:name="android.permission.REORDER_TASKS" />
 
     <application
         android:allowBackup="true"
@@ -25,9 +30,13 @@
             </intent-filter>
         </activity>
 
+        <!-- singleTask：保证全局只有一个主界面实例。否则从引导页/开机入口再次打开时
+             会叠出第二个 MainActivity，各自持有 WebSocket，服务端会因重复设备连接
+             反复断开（code 1000），表现为每隔两秒重连一次。 -->
         <activity
             android:name=".activities.MainActivity"
             android:exported="false"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize" />
 
         <activity
@@ -46,6 +55,39 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- 开机自启（可在设置中关闭）。exported=false：开机广播由系统发送，
+             非导出接收器仍然收得到，但第三方应用无法伪造 QUICKBOOT 等广播拉起本应用。 -->
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <!-- priority=1000：开机广播按优先级顺序投递。这台音箱的厂商语音助手
+                 （com.phicomm.speaker.device）会在开机时直接独占麦克风阵列，
+                 我们必须抢在它前面打开麦克风，否则音频 HAL 会阻塞到无法录音/播放。 -->
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 电脑端脚本控制入口：adb 发送 START / STOP 广播即可远程打开或退出应用
+             （盒子无触摸屏，见 tools/xiaozhi-device.ps1）。必须 exported 才能接收
+             adb shell 的广播；用 DUMP 权限限制发送方：该权限只有 shell/系统/特权应用
+             持有，普通第三方应用无法控制本应用。 -->
+        <receiver
+            android:name=".receiver.ControlReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="com.lhht.xiaozhi.ai.action.START" />
+                <action android:name="com.lhht.xiaozhi.ai.action.STOP" />
+                <action android:name="com.lhht.xiaozhi.ai.action.BOOT_ON" />
+                <action android:name="com.lhht.xiaozhi.ai.action.BOOT_OFF" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

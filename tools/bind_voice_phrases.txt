@@ -1,0 +1,14 @@
+bind_intro	设备还没有绑定。请在手机上打开小智控制台，添加设备。验证码是
+bind_repeat	验证码还没有输入。请再听一次。验证码是
+bind_again	再重复一遍。验证码是
+bind_success	绑定成功，正在连接小智
+digit_0	零
+digit_1	一
+digit_2	二
+digit_3	三
+digit_4	四
+digit_5	五
+digit_6	六
+digit_7	七
+digit_8	八
+digit_9	九

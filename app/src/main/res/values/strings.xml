@@ -12,6 +12,11 @@
     <string name="enable_token">启用 Token 认证</string>
     <string name="allow_insecure_tls">允许自签名证书（不安全）</string>
     <string name="allow_insecure_tls_hint">仅在自建服务器使用自签名 WSS 证书时开启。开启后将跳过证书校验，存在中间人风险。</string>
+    <string name="auto_start_title">启动与自动对话</string>
+    <string name="auto_start">应用启动后自动连接并开始对话</string>
+    <string name="auto_start_hint">适用于无触摸屏的音箱/盒子设备：应用启动后自动连接服务器并进入语音对话状态（相当于自动点击“连接”和“开始聊天”）。</string>
+    <string name="boot_auto_start">开机自动启动应用</string>
+    <string name="boot_auto_start_hint">盒子重启后自动打开应用，与上面的“自动连接”互不影响。电脑端脚本的“打开/退出”不会修改这个开关。</string>
     <string name="connection_status">连接状态：%s</string>
     <string name="status_connected">已连接</string>
     <string name="status_disconnected">未连接</string>

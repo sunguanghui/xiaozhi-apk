@@ -30,6 +30,8 @@ public class SettingsActivity extends AppCompatActivity {
     private SwitchMaterial enableTokenSwitch;
     private SwitchMaterial useOfficialSwitch;
     private SwitchMaterial allowInsecureTlsSwitch;
+    private SwitchMaterial autoStartSwitch;
+    private SwitchMaterial bootAutoStartSwitch;
     // 大屏布局（sw600dp）中该容器为 LinearLayout，使用基类 View 兼容两种布局
     private View officialConfigCard;
     private View selfHostConfigCard;
@@ -53,6 +55,8 @@ public class SettingsActivity extends AppCompatActivity {
         enableTokenSwitch = findViewById(R.id.enableTokenSwitch);
         useOfficialSwitch = findViewById(R.id.useOfficialSwitch);
         allowInsecureTlsSwitch = findViewById(R.id.allowInsecureTlsSwitch);
+        autoStartSwitch = findViewById(R.id.autoStartSwitch);
+        bootAutoStartSwitch = findViewById(R.id.bootAutoStartSwitch);
         officialConfigCard = findViewById(R.id.officialConfigCard);
         selfHostConfigCard = findViewById(R.id.selfHostConfigCard);
         deviceIdText = findViewById(R.id.deviceIdText);
@@ -113,6 +117,12 @@ public class SettingsActivity extends AppCompatActivity {
         if (allowInsecureTlsSwitch != null) {
             allowInsecureTlsSwitch.setChecked(settingsManager.isAllowInsecureTls());
         }
+        if (autoStartSwitch != null) {
+            autoStartSwitch.setChecked(settingsManager.isAutoStartEnabled());
+        }
+        if (bootAutoStartSwitch != null) {
+            bootAutoStartSwitch.setChecked(settingsManager.isBootAutoStartEnabled());
+        }
 
         // 官方平台开关
         boolean useOfficial = settingsManager.isUseOfficialServer();
@@ -160,6 +170,12 @@ public class SettingsActivity extends AppCompatActivity {
         settingsManager.saveSettings(wsUrl, token, enableToken);
         if (allowInsecureTlsSwitch != null) {
             settingsManager.setAllowInsecureTls(allowInsecureTlsSwitch.isChecked());
+        }
+        if (autoStartSwitch != null) {
+            settingsManager.setAutoStartEnabled(autoStartSwitch.isChecked());
+        }
+        if (bootAutoStartSwitch != null) {
+            settingsManager.setBootAutoStartEnabled(bootAutoStartSwitch.isChecked());
         }
 
         Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show();

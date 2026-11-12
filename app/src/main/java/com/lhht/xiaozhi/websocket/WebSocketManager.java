@@ -1,6 +1,7 @@
 package com.lhht.xiaozhi.websocket;
 
 import android.content.Context;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -13,12 +14,16 @@ import org.java_websocket.handshake.ServerHandshake;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
+import java.net.Socket;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.security.cert.X509Certificate;
@@ -116,6 +121,11 @@ public class WebSocketManager {
         closeClientQuietly();
         helloReceived = false;
 
+        // API < 24 的 WSS 预建 socket 参数（见下方 wss 分支）
+        SSLSocketFactory legacyTlsFactory = null;
+        String legacyTlsHost = null;
+        int legacyTlsPort = 443;
+
         try {
             Map<String, String> headers = new HashMap<>();
             headers.put("Device-Id", deviceId);
@@ -153,6 +163,19 @@ public class WebSocketManager {
                         if (l != null) l.onConnected();
                         scheduleHealthCheck(myGeneration);
                     });
+                }
+
+                /**
+                 * Java-WebSocket 1.5.x 的默认实现会调用 SSLParameters.setEndpointIdentificationAlgorithm()，
+                 * 该方法是 Android 7.0（API 24）才加入的。在 Android 5.x/6.x 上会抛 NoSuchMethodError，
+                 * 且运行在 WebSocket 读线程里无人捕获，会直接把整个进程带崩（表现：点击“连接”立即退出）。
+                 * 这里按系统版本降级：API 24+ 保留 HTTPS 主机名校验，旧系统跳过。
+                 */
+                @Override
+                protected void onSetSSLParameters(SSLParameters sslParameters) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        sslParameters.setEndpointIdentificationAlgorithm("HTTPS");
+                    }
                 }
 
                 @Override
@@ -256,36 +279,114 @@ public class WebSocketManager {
             newClient.setConnectionLostTimeout(CONNECTION_LOST_TIMEOUT_SEC);
 
             // WSS：默认使用系统证书校验；仅当用户显式开启“允许自签名证书”时才放宽
-            if ("wss".equalsIgnoreCase(uri.getScheme()) && allowInsecureTls) {
-                try {
-                    TrustManager[] trustAll = new TrustManager[]{
-                        new X509TrustManager() {
-                            public void checkClientTrusted(X509Certificate[] chain, String authType) {}
-                            public void checkServerTrusted(X509Certificate[] chain, String authType) {}
-                            public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
-                        }
-                    };
-                    SSLContext sslContext = SSLContext.getInstance("TLS");
-                    sslContext.init(null, trustAll, new java.security.SecureRandom());
-                    newClient.setSocketFactory(sslContext.getSocketFactory());
-                    LogUtils.getInstance().d(context, TAG,
-                            "WSS 已禁用证书校验（用户开启了“允许自签名证书”，存在中间人风险）");
-                } catch (Exception sslEx) {
-                    LogUtils.getInstance().e(context, TAG, "WSS SSL 初始化失败", sslEx);
-                    WebSocketListener l = listener;
-                    if (l != null) l.onError("SSL 配置失败: " + sslEx.getMessage());
-                    return;
+            if ("wss".equalsIgnoreCase(uri.getScheme())) {
+                if (allowInsecureTls) {
+                    try {
+                        TrustManager[] trustAll = new TrustManager[]{
+                            new X509TrustManager() {
+                                public void checkClientTrusted(X509Certificate[] chain, String authType) {}
+                                public void checkServerTrusted(X509Certificate[] chain, String authType) {}
+                                public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+                            }
+                        };
+                        SSLContext sslContext = SSLContext.getInstance("TLS");
+                        sslContext.init(null, trustAll, new java.security.SecureRandom());
+                        newClient.setSocketFactory(sslContext.getSocketFactory());
+                        LogUtils.getInstance().d(context, TAG,
+                                "WSS 已禁用证书校验（用户开启了“允许自签名证书”，存在中间人风险）");
+                    } catch (Exception sslEx) {
+                        LogUtils.getInstance().e(context, TAG, "WSS SSL 初始化失败", sslEx);
+                        WebSocketListener l = listener;
+                        if (l != null) l.onError("SSL 配置失败: " + sslEx.getMessage());
+                        return;
+                    }
+                } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+                    // API 24 以下有两个坑：
+                    // 1) SSLSocket 默认不校验证书主机名，而 Java-WebSocket 依赖的
+                    //    SSLParameters.setEndpointIdentificationAlgorithm() 在旧系统上不存在（会崩进程）——
+                    //    用自定义 TrustManager 在握手阶段补齐证书链 + 主机名校验；
+                    // 2) Java-WebSocket 会先建一个无主机名的裸 socket 再分层封装，旧系统 Conscrypt
+                    //    在这种路径下不发送 SNI；官方网关按 SNI 选证书，缺失时返回默认证书
+                    //    （实测 api.tenclass.net 会拿到 mqtt.tenclass.net 的证书）——
+                    //    这里改为直接创建一个带主机名的 SSLSocket 交给客户端连接，确保 ClientHello 带 SNI。
+                    // 注意：createSocket(host, port) 会做 DNS 解析，主线程调用会抛
+                    // NetworkOnMainThreadException，所以真正的建连放到下面的后台线程里做。
+                    try {
+                        legacyTlsHost = uri.getHost();
+                        legacyTlsPort = uri.getPort() != -1 ? uri.getPort() : 443;
+                        legacyTlsFactory = TlsCompat.createHostnameVerifyingSocketFactory(legacyTlsHost);
+                        LogUtils.getInstance().d(context, TAG,
+                                "API " + Build.VERSION.SDK_INT + "：启用 SNI + TrustManager 主机名校验");
+                    } catch (Exception tlsEx) {
+                        LogUtils.getInstance().e(context, TAG, "TLS 主机名校验初始化失败", tlsEx);
+                        WebSocketListener l = listener;
+                        if (l != null) l.onError("TLS 配置失败: " + tlsEx.getMessage());
+                        return;
+                    }
                 }
             }
 
             client = newClient;
-            newClient.connect();
-            LogUtils.getInstance().d(context, TAG, "connect() 已调用（非阻塞）");
+            if (legacyTlsFactory != null) {
+                connectWithPreparedTlsSocket(newClient, legacyTlsFactory, legacyTlsHost,
+                        legacyTlsPort, myGeneration);
+            } else {
+                newClient.connect();
+                LogUtils.getInstance().d(context, TAG, "connect() 已调用（非阻塞）");
+            }
 
         } catch (Exception e) {
             LogUtils.getInstance().e(context, TAG, "创建 WebSocket 失败", e);
             WebSocketListener l = listener;
             if (l != null) l.onError(e.getMessage());
+        }
+    }
+
+    /**
+     * API &lt; 24 的 WSS 建连：先在后台线程创建带 SNI 的 SSLSocket，再交给 Java-WebSocket 连接。
+     *
+     * <p>不能在主线程做：{@code SSLSocketFactory.createSocket(host, port)} 会做 DNS 解析，
+     * 在 StrictMode 下抛 {@link android.os.NetworkOnMainThreadException}。
+     * 建连失败时在主线程回调 onError 并走常规重连退避。
+     */
+    private void connectWithPreparedTlsSocket(final WebSocketClient newClient,
+                                              final SSLSocketFactory factory,
+                                              final String host, final int port,
+                                              final int myGeneration) {
+        Thread t = new Thread(() -> {
+            Socket tlsSocket = null;
+            try {
+                tlsSocket = factory.createSocket(host, port);
+                if (myGeneration != generation) {
+                    LogUtils.getInstance().d(context, TAG, "连接代次已变化，放弃本轮 TLS 建连");
+                    closeQuietly(tlsSocket);
+                    return;
+                }
+                newClient.setSocket(tlsSocket);
+                newClient.connect();
+                LogUtils.getInstance().d(context, TAG,
+                        "connect() 已调用（API < 24：预建 SNI SSLSocket -> " + host + ":" + port + "）");
+            } catch (Exception e) {
+                closeQuietly(tlsSocket);
+                final String message = e.getMessage() != null ? e.getMessage() : e.toString();
+                LogUtils.getInstance().e(context, TAG, "TLS 预建 socket 失败: " + message, e);
+                mainHandler.post(() -> {
+                    if (myGeneration != generation) return;
+                    WebSocketListener l = listener;
+                    if (l != null) l.onError("TLS 连接失败: " + message);
+                    scheduleReconnect();
+                });
+            }
+        }, "WsTlsConnect");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private static void closeQuietly(Socket socket) {
+        if (socket == null) return;
+        try {
+            socket.close();
+        } catch (IOException ignored) {
         }
     }
 

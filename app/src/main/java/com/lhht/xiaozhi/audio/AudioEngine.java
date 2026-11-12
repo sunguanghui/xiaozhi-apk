@@ -31,7 +31,9 @@ public class AudioEngine {
     private static final int SAMPLE_RATE = 16000;
     private static final int CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO;
     private static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
-    private static final int BUFFER_SIZE = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT);
+    // 注意：AudioRecord.getMinBufferSize() 会通过 Binder 询问 audioflinger，
+    // 设备音频服务繁忙时可能阻塞很久。它不能放在静态初始化块里（会卡住第一次使用
+    // AudioEngine 的线程，通常是主线程），改为在录音线程内按需计算。
     private static final int OPUS_FRAME_SIZE = 960; // 60ms at 16kHz
     private static final int PCM_CHUNK_SAMPLES = 320; // 20ms @16kHz，播放线程每次消费的样本数
     private static final int FIFO_CAPACITY_SAMPLES = SAMPLE_RATE; // 应用层播放缓冲上限：1秒，超出则丢最旧样本
@@ -72,9 +74,17 @@ public class AudioEngine {
 
     private volatile boolean isRecording = false;
     private volatile boolean isPlaying = false;
+    private volatile boolean released = false;
+    /**
+     * 是否把采集到的音频发送给服务端。自动模式（音箱/盒子无触摸）下会一直占用麦克风，
+     * 但只在本轮通话期间发送，避免未开始对话时向服务端推送无效音频。
+     */
+    private volatile boolean transmitEnabled = true;
     private volatile long flushUntilMs = 0;
     private volatile boolean firstAudioDataReceived = false;
     private volatile boolean firstAudioWritten = false;
+    /** 本轮是否已记录过“tts.start 之前到达的音频被丢弃”，避免每帧刷日志 */
+    private volatile boolean droppedBeforePlaybackLogged = false;
 
     /** 录音循环代次：stop/release/重新 start 时递增，旧循环检测到代次变化后退出并自行释放 AudioRecord。 */
     private volatile int recordGeneration = 0;
@@ -97,7 +107,13 @@ public class AudioEngine {
 
     /** 初始化 AudioTrack、Opus 编解码器，并启动独立播放消费线程。在会话首次创建时调用一次。 */
     public void init() {
-        initAudioTrack();
+        // AudioTrack 的构造会通过 Binder 进入 audioserver/HAL；设备音频服务繁忙时
+        // 可能阻塞数十秒。绝不能放在主线程，否则应用启动就会白屏甚至 ANR。
+        // 播放线程在 track 就绪前会自动退避等待。
+        Thread trackInitThread = new Thread(this::initAudioTrack, "AudioTrackInit");
+        trackInitThread.setDaemon(true);
+        trackInitThread.start();
+
         encoderHandle = opusUtils.createEncoder(SAMPLE_RATE, 1, 10);
         decoderHandle = opusUtils.createDecoder(SAMPLE_RATE, 1);
         if (encoderHandle == 0 || decoderHandle == 0) {
@@ -138,16 +154,29 @@ public class AudioEngine {
                         AudioFormat.CHANNEL_OUT_MONO, AUDIO_FORMAT,
                         minBufferSize, AudioTrack.MODE_STREAM);
             }
+            if (released) {
+                // 初始化期间已释放（Activity 很快关闭）：直接丢弃，避免泄漏 AudioTrack
+                track.release();
+                return;
+            }
             audioTrack = track;
-            if (audioTrack.getState() == AudioTrack.STATE_INITIALIZED) {
+            if (track.getState() == AudioTrack.STATE_INITIALIZED) {
                 Log.i(TAG, "AudioTrack初始化成功（缓冲 " + minBufferSize + " 字节，API " + Build.VERSION.SDK_INT + "）");
-                audioTrack.play();
+                LogUtils.getInstance().d(context, TAG,
+                        "AudioTrack初始化成功（缓冲 " + minBufferSize + " 字节，API " + Build.VERSION.SDK_INT + "）");
+                track.play();
             } else {
-                Log.e(TAG, "AudioTrack初始化失败: " + audioTrack.getState());
-                audioTrack = null;
+                Log.e(TAG, "AudioTrack初始化失败: " + track.getState());
+                LogUtils.getInstance().e(context, TAG, "AudioTrack初始化失败: " + track.getState(),
+                        new IllegalStateException("AudioTrack init failed"));
+                if (audioTrack == track) {
+                    audioTrack = null;
+                }
             }
         } catch (Exception e) {
-            LogUtils.getInstance().e(context, TAG, "创建AudioTrack失败", e);
+            if (!released) {
+                LogUtils.getInstance().e(context, TAG, "创建AudioTrack失败", e);
+            }
             audioTrack = null;
         }
     }
@@ -237,6 +266,30 @@ public class AudioEngine {
         return isPlaying;
     }
 
+    /** 控制是否向服务端发送采集音频；不影响麦克风本身的打开状态。 */
+    public void setTransmitEnabled(boolean enabled) {
+        transmitEnabled = enabled;
+    }
+
+    /**
+     * 只停止播放（清空 FIFO、丢弃迟到的音频包），保持麦克风继续采集。
+     * 用于自动模式：断线/挂断时不能释放麦克风，否则厂商语音助手会抢走它并卡死音频 HAL。
+     */
+    public void cancelPlayback() {
+        isPlaying = false;
+        playbackEpoch++;
+        audioFifo.clear();
+        underrunChunks = 0;
+        transmitEnabled = false;
+    }
+
+    /**
+     * 开始录音。
+     *
+     * <p>AudioRecord 的构造函数会通过 Binder 进入 audioserver/HAL，设备音频服务繁忙时
+     * 可能阻塞数秒甚至数十秒（实测与厂商常驻录音进程争用麦克风时会把主线程卡死到 ANR）。
+     * 因此构造、startRecording、read 全部放到录音线程执行，UI 线程只置状态。
+     */
     public void startRecording() {
         if (isRecording) return;
 
@@ -248,27 +301,65 @@ public class AudioEngine {
         }
 
         final int generation = ++recordGeneration;
-        final AudioRecord record;
-        try {
-            record = new AudioRecord(MediaRecorder.AudioSource.MIC,
-                    SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, BUFFER_SIZE);
-        } catch (Exception e) {
-            LogUtils.getInstance().e(context, TAG, "创建AudioRecord失败", e);
-            notifyAudioError("麦克风初始化失败: " + e.getMessage());
-            return;
-        }
-        if (record.getState() != AudioRecord.STATE_INITIALIZED) {
-            record.release();
-            LogUtils.getInstance().e(context, TAG,
-                    "AudioRecord 状态异常: " + record.getState(),
-                    new IllegalStateException("AudioRecord not initialized"));
-            notifyAudioError("麦克风不可用，请检查权限或重启应用");
-            return;
-        }
-
-        audioRecord = record;
         isRecording = true;
-        recordExecutor.execute(() -> recordLoop(record, generation));
+        try {
+            recordExecutor.execute(() -> createRecordAndLoop(generation));
+        } catch (Exception e) {
+            isRecording = false;
+            LogUtils.getInstance().e(context, TAG, "提交录音任务失败", e);
+            notifyAudioError("麦克风启动失败: " + e.getMessage());
+        }
+    }
+
+    /** 在录音线程上完成 AudioRecord 创建 + 状态校验，然后进入录音循环。 */
+    private void createRecordAndLoop(int generation) {
+        Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO);
+        AudioRecord record = null;
+        try {
+            // 厂商语音助手（com.phicomm.speaker.device）会独占麦克风阵列：若它先占用，
+            // 下面的调用会一直阻塞在音频 HAL 里（并连带卡住 AudioFlinger 输出）。
+            // 先留日志，便于定位“录音线程一直没动静”的场景。
+            LogUtils.getInstance().d(context, TAG,
+                    "开始创建 AudioRecord（若长时间无“创建成功”日志，说明麦克风被其他进程占用）");
+            // getMinBufferSize() 同样会阻塞在 audioserver，必须在录音线程上计算
+            int bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT);
+            if (bufferSize <= 0) {
+                // 某些老设备在 HAL 繁忙时返回错误码，退化为 1 秒缓冲兜底
+                bufferSize = SAMPLE_RATE * 2;
+            }
+            record = new AudioRecord(MediaRecorder.AudioSource.MIC,
+                    SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, bufferSize);
+            // 构造期间可能已被 stop/release，丢弃本次创建结果
+            if (generation != recordGeneration || !isRecording) {
+                record.release();
+                return;
+            }
+            if (record.getState() != AudioRecord.STATE_INITIALIZED) {
+                int state = record.getState();
+                record.release();
+                LogUtils.getInstance().e(context, TAG,
+                        "AudioRecord 状态异常: " + state,
+                        new IllegalStateException("AudioRecord not initialized"));
+                notifyAudioError("麦克风不可用，请检查权限或重启应用");
+                return;
+            }
+            audioRecord = record;
+            LogUtils.getInstance().d(context, TAG,
+                    "AudioRecord 创建成功，开始采集（generation=" + generation + "）");
+            recordLoop(record, generation);
+        } catch (Exception e) {
+            if (record != null) {
+                try {
+                    record.release();
+                } catch (Exception ignored) {
+                    // 忽略重复释放
+                }
+            }
+            if (generation == recordGeneration) {
+                LogUtils.getInstance().e(context, TAG, "创建AudioRecord失败", e);
+                notifyAudioError("麦克风初始化失败: " + e.getMessage());
+            }
+        }
     }
 
     private void recordLoop(AudioRecord record, int generation) {
@@ -276,11 +367,17 @@ public class AudioEngine {
         short[] buffer = new short[OPUS_FRAME_SIZE];
         byte[] encodedBuffer = new byte[1024];
         long lastAudioTime = System.currentTimeMillis();
+        boolean loggedFirstRead = false;
         try {
             record.startRecording();
             while (isRecording && generation == recordGeneration) {
                 int samplesRead = record.read(buffer, 0, OPUS_FRAME_SIZE);
                 if (samplesRead <= 0) continue;
+                if (!loggedFirstRead) {
+                    loggedFirstRead = true;
+                    LogUtils.getInstance().d(context, TAG,
+                            "录音采集正常（首帧 " + samplesRead + " 样本）");
+                }
 
                 float amplitude = 0;
                 for (int i = 0; i < samplesRead; i++) {
@@ -303,7 +400,7 @@ public class AudioEngine {
                     long now = System.currentTimeMillis();
                     // isPlaying=true：AI 正在说话，跳过发送（防止实时回声）
                     // flushUntilMs：播放刚排空，清空 AudioRecord 里积压的回声帧
-                    if (!isPlaying && now >= flushUntilMs) {
+                    if (transmitEnabled && !isPlaying && now >= flushUntilMs) {
                         byte[] encodedData = new byte[encodedBytes];
                         System.arraycopy(encodedBuffer, 0, encodedData, 0, encodedBytes);
                         Listener callback = listener;
@@ -313,7 +410,7 @@ public class AudioEngine {
                     Log.e(TAG, "Opus编码失败: " + encodedBytes);
                 }
 
-                if (!isPlaying && System.currentTimeMillis() >= flushUntilMs
+                if (transmitEnabled && !isPlaying && System.currentTimeMillis() >= flushUntilMs
                         && System.currentTimeMillis() - lastAudioTime > SILENCE_TIMEOUT_MS) {
                     short[] silenceFrame = new short[OPUS_FRAME_SIZE];
                     int silenceBytes = opusUtils.encode(encoderHandle, silenceFrame, 0, encodedBuffer);
@@ -379,6 +476,7 @@ public class AudioEngine {
             underrunChunks = 0;
             firstAudioDataReceived = false;
             firstAudioWritten = false;
+            droppedBeforePlaybackLogged = false;
             latencyTracker.reset();
             latencyTracker.mark("tts_start");
         }
@@ -395,9 +493,12 @@ public class AudioEngine {
         audioExecutor.execute(() -> {
             waitForFifoDrain();
             // 等待期间可能已经开始下一轮（或用户挂断），此时不能再把状态改成“已停止”
-            if (epoch != playbackEpoch) return;
+            if (epoch != playbackEpoch) {
+                LogUtils.getInstance().d(context, TAG, "播放回合已切换，跳过本轮排空回调");
+                return;
+            }
             isPlaying = false;
-            Log.i(TAG, "本轮播放排空，FIFO 欠载 " + underrunChunks + " 次");
+            LogUtils.getInstance().d(context, TAG, "本轮播放排空，FIFO 欠载 " + underrunChunks + " 次");
             Listener l = listener;
             if (l != null) l.onPlaybackDrained();
         });
@@ -422,11 +523,21 @@ public class AudioEngine {
 
     /** 收到服务端二进制 Opus 音频帧：解码后推入播放 FIFO，播放节奏由独立播放线程消费 */
     public void feedEncodedAudio(byte[] data) {
-        if (!isPlaying) return;
+        if (!isPlaying) {
+            // 服务端可能在 tts.start 到达前就开始推音频；静默丢弃会让整轮没有声音，
+            // 这里留一次日志，便于区分“没收到音频”和“收到了但被丢弃”
+            if (!droppedBeforePlaybackLogged) {
+                droppedBeforePlaybackLogged = true;
+                LogUtils.getInstance().d(context, TAG,
+                        "丢弃 tts.start 之前到达的二进制音频（" + data.length + " 字节）");
+            }
+            return;
+        }
 
         if (!firstAudioDataReceived) {
             firstAudioDataReceived = true;
             latencyTracker.mark("first_binary");
+            LogUtils.getInstance().d(context, TAG, "收到本轮首帧二进制音频（" + data.length + " 字节）");
         }
 
         if (decoderHandle == 0) {
@@ -443,7 +554,8 @@ public class AudioEngine {
                 short[] decodeBuf = new short[OPUS_FRAME_SIZE];
                 int decodedSamples = opusUtils.decode(decoderHandle, audioData, decodeBuf);
                 if (decodedSamples < 0) {
-                    Log.e(TAG, "Opus解码失败: " + decodedSamples);
+                    LogUtils.getInstance().e(context, TAG, "Opus解码失败: " + decodedSamples,
+                            new IllegalStateException("opus decode error"));
                     return;
                 }
                 if (decodedSamples == 0 || epoch != playbackEpoch) return;
@@ -465,6 +577,7 @@ public class AudioEngine {
 
     /** 释放所有资源，在会话 ViewModel 被清理时调用 */
     public void release() {
+        released = true;
         isRecording = false;
         isPlaying = false;
         recordGeneration++;
