@@ -16,12 +16,16 @@
                  APK 文件名不限：默认优先用同目录的 app-debug.apk；
                  目录里只有一个 .apk 时自动用它；有多个时用 -Apk 指定
       start      打开应用：自动连接、自动进入语音对话、占用麦克风
-      stop       退出应用：断开连接、释放麦克风并结束进程（不改动开机自启设置）
+      stop       退出应用：断开连接、释放麦克风并结束进程（不改动开机自启设置），
+                 随后重新启动厂商语音助手，恢复「小讯小讯」唤醒词
                  对话中对盒子说“退出小智”会触发同样的退出
       boot-on    开启开机自启（盒子重启后自动打开应用）
       boot-off   关闭开机自启（默认关闭：开机后不会自动打开应用）
       status     查看应用是否在运行、开机自启状态，并输出最近的日志
-      uninstall  卸载应用
+      uninstall  卸载应用，并重新启动厂商语音助手，恢复「小讯小讯」唤醒词
+
+    每次运行结束会断开设备连接并关闭 adb server，避免后台长期占用；
+    如果还要和其他 adb 工具共用 server，加 -KeepAdbServer。
 
     开机自启是独立开关，只由 boot-on / boot-off（或应用设置页的“开机自动启动应用”）
     决定，start / stop 不会修改它。
@@ -50,7 +54,10 @@ param(
 
     [string]$Apk = '',
 
-    [string]$Adb = ''
+    [string]$Adb = '',
+
+    # 默认在脚本结束时断开设备并关闭 adb server；与其他 adb 工具共用时加此开关
+    [switch]$KeepAdbServer
 )
 
 $ErrorActionPreference = 'Stop'
@@ -65,11 +72,16 @@ $scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $My
 
 $Package   = 'com.lhht.xiaozhi.ai'
 $VendorApp = 'com.phicomm.speaker.device'   # 厂商语音助手，会独占麦克风
+# 实测该固件上可用的是 .ui.MainActivity（.ui.SplashActivity 不存在）
+$VendorActivity = "$VendorApp/.ui.MainActivity"
 $Receiver  = "$Package/com.lhht.xiaozhi.receiver.ControlReceiver"
 $ActionStart = "$Package.action.START"
 $ActionStop  = "$Package.action.STOP"
 $ActionBootOn  = "$Package.action.BOOT_ON"
 $ActionBootOff = "$Package.action.BOOT_OFF"
+
+# 日志中不能出现的敏感字段（与 r1-iot 服务端保持一致）
+$SensitivePattern = 'OTA 响应|Body=|Device-Id=|Client-Id=|WS Token|携带 Authorization|deviceId=|clientId=|Bearer\s+\S+|token=\S+'
 
 # ── adb 定位与连接 ───────────────────────────────────────────────────────────
 
@@ -124,10 +136,18 @@ function Resolve-DeviceAddress {
 }
 
 function Connect-Device {
+    # 记录本次实际连接的设备，脚本结束时统一断开
+    $script:LastDevice = $Device
     if ($Device -match ':') {
         & $Adb connect $Device | Out-Null
     }
     $state = (& $Adb -s $Device get-state 2>&1) -join ''
+    if ($state.Trim() -ne 'device' -and $Device -match ':') {
+        # 实测 adbd 偶尔会短暂 offline：断开重连一次再判断
+        & $Adb disconnect $Device 2>&1 | Out-Null
+        & $Adb connect $Device 2>&1 | Out-Null
+        $state = (& $Adb -s $Device get-state 2>&1) -join ''
+    }
     if ($state.Trim() -ne 'device') {
         throw "设备未连接：$Device（$state）"
     }
@@ -148,15 +168,21 @@ function Invoke-DevicePm {
     return Invoke-Adb shell $cmd
 }
 
-function Get-AppProcessId {
+function Get-PackageProcessId {
+    param([string]$Name)
     $lines = (Invoke-Adb shell ps) -join "`n"
     foreach ($line in ($lines -split "`n")) {
-        if ($line -match "^\S+\s+(\d+)\s+.*\s$([regex]::Escape($Package))\s*$") {
+        if ($line -match "^\S+\s+(\d+)\s+.*\s$([regex]::Escape($Name))\s*$") {
             return [int]$Matches[1]
         }
     }
     return $null
 }
+
+function Get-AppProcessId { return (Get-PackageProcessId $Package) }
+
+# 只认厂商主进程；:remote 等子进程存在不代表语音服务可用
+function Get-VendorProcessId { return (Get-PackageProcessId $VendorApp) }
 
 function Get-AppLog {
     param([int]$Tail = 25)
@@ -164,6 +190,13 @@ function Get-AppLog {
     $all = @($lines -split "`n" | Where-Object { $_ -ne '' })
     if ($all.Count -le $Tail) { return $all }
     return $all[($all.Count - $Tail)..($all.Count - 1)]
+}
+
+function Write-AppLogTail {
+    param([int]$Tail = 15)
+    @(Get-AppLog $Tail |
+        Where-Object { $_ -notmatch $SensitivePattern }) |
+        ForEach-Object { Write-Host $_ }
 }
 
 function Get-LastLogTimestamp {
@@ -271,7 +304,23 @@ function Invoke-Install {
     }
     Write-Host '[install] 安装成功，正在自动打开应用...'
     # 装完直接拉起：自动连接并进入语音对话（等同于执行 start）
-    Invoke-Start
+    # 部分固件会自己把应用拉起来，已就绪时跳过 60 秒等待
+    if (-not (Test-AppAlreadyStarted)) {
+        Invoke-Start
+    }
+}
+
+# 安装后固件有时会自己拉起应用：进程存在且日志已出现就绪标记时跳过启动等待
+function Test-AppAlreadyStarted {
+    $appPid = Get-AppProcessId
+    if (-not $appPid) { return $false }
+    $recent = (Get-AppLog 80) -join "`n"
+    if ($recent -notmatch '自动开始语音对话|"type":"bind"') { return $false }
+    Write-Host "[install] 应用已自动启动并连接（pid=$appPid，跳过启动等待）。"
+    # 与正常 start 一致：停掉厂商助手，避免它继续占用麦克风
+    Invoke-DeviceAm @('force-stop', $VendorApp) | Out-Null
+    Write-AppLogTail 15
+    return $true
 }
 
 function Invoke-Start {
@@ -295,9 +344,7 @@ function Invoke-Start {
     # 两种情况都算启动成功，不必等满 60 秒。
     $ok = Wait-AppLogPattern '自动开始语音对话|"type":"bind"' $since 60
     # 输出最近的日志便于排查；过滤掉 token、设备 ID 等敏感内容（与 status 一致）
-    $tail = @(Get-AppLog 15 |
-        Where-Object { $_ -notmatch 'OTA 响应|Body=|Device-Id=|Client-Id=|WS Token|携带 Authorization|deviceId=|clientId=' }) -join "`n"
-    Write-Host $tail
+    Write-AppLogTail 15
     if ($ok) {
         $new = @(Get-AppLog 200 | Where-Object {
             if (-not $since) { return $true }
@@ -316,27 +363,63 @@ function Invoke-Start {
     }
 }
 
-function Invoke-Stop {
-    $appPid = Get-AppProcessId
-    if (-not $appPid) {
-        Write-Host '[stop] 应用没有在运行。'
+# 打开小智前会 force-stop 厂商助手释放麦克风，这会把包置为 stopped 状态，
+# 系统之后无法再隐式拉起它，唤醒词「小讯小讯」就没有反应。退出 / 卸载小智后
+# 必须显式启动 .ui.MainActivity 清除 stopped 状态（.ui.SplashActivity 不存在）。
+# Force：即使 ps 里还能看到厂商进程也可能只是系统拉起的空壳，先 force-stop 再启动。
+function Restore-VendorAssistant {
+    param([switch]$Force)
+    $vendorPid = Get-VendorProcessId
+    if ($vendorPid -and -not $Force) {
+        Write-Host '[vendor] 厂商语音助手已在运行。'
         return
     }
-    Write-Host "[stop] 发送退出指令（pid=$appPid）..."
-    Invoke-DeviceAm @('broadcast', '-a', $ActionStop, '-n', $Receiver) | Out-Null
-
-    $deadline = (Get-Date).AddSeconds(20)
-    while ((Get-Date) -lt $deadline) {
-        if (-not (Get-AppProcessId)) {
-            Write-Host '[stop] 应用已退出，麦克风已释放（开机自启设置未改动）。'
-            return
-        }
-        Start-Sleep -Milliseconds 1000
+    if ($vendorPid) {
+        Write-Host '[vendor] 重新启动厂商语音助手（恢复「小讯小讯」唤醒词）...'
+        Invoke-DeviceAm @('force-stop', $VendorApp) | Out-Null
+        Start-Sleep -Milliseconds 500
+    } else {
+        Write-Host '[vendor] 恢复厂商语音助手（恢复「小讯小讯」唤醒词）...'
     }
-    # 兜底：优雅退出超时就直接强杀（下次 start 前建议重启一次盒子）
-    Write-Host '[stop] 优雅退出超时，强制结束进程...'
-    Invoke-DeviceAm @('force-stop', $Package) | Out-Null
-    Write-Host '[stop] 已强制结束。'
+    $out = (Invoke-DeviceAm @('start', '-n', $VendorActivity)) -join "`n"
+    if ($out -match 'Error|not started|unable to resolve') {
+        Write-Host "[vendor] 恢复失败：$out"
+        return
+    }
+    Start-Sleep -Milliseconds 1200
+    if (Get-VendorProcessId) {
+        Write-Host '[vendor] 厂商语音助手已恢复，唤醒词可正常使用。'
+    } else {
+        Write-Host '[vendor] 已发送恢复指令，但没确认到厂商进程；请查看 status 或重启盒子。'
+    }
+}
+
+function Invoke-Stop {
+    $appPid = Get-AppProcessId
+    $wasRunning = [bool]$appPid
+    if (-not $appPid) {
+        Write-Host '[stop] 应用没有在运行。'
+    } else {
+        Write-Host "[stop] 发送退出指令（pid=$appPid）..."
+        Invoke-DeviceAm @('broadcast', '-a', $ActionStop, '-n', $Receiver) | Out-Null
+
+        $stopped = $false
+        $deadline = (Get-Date).AddSeconds(20)
+        while ((Get-Date) -lt $deadline) {
+            if (-not (Get-AppProcessId)) { $stopped = $true; break }
+            Start-Sleep -Milliseconds 1000
+        }
+        if ($stopped) {
+            Write-Host '[stop] 应用已退出，麦克风已释放（开机自启设置未改动）。'
+        } else {
+            # 兜底：优雅退出超时就直接强杀（下次 start 前建议重启一次盒子）
+            Write-Host '[stop] 优雅退出超时，强制结束进程...'
+            Invoke-DeviceAm @('force-stop', $Package) | Out-Null
+            Write-Host '[stop] 已强制结束。'
+        }
+    }
+    # 与卸载后的处理一致：确保厂商助手（唤醒词）恢复
+    Restore-VendorAssistant -Force:$wasRunning
 }
 
 function Get-BootAutoStartState {
@@ -362,7 +445,14 @@ function Set-BootAutoStart {
 
 function Get-AppUiRunning {
     $dump = (Invoke-Adb shell "dumpsys activity activities") -join "`n"
-    return ($dump -match "$([regex]::Escape($Package))/\S*activities\.MainActivity")
+    # 只认当前前台字段；mLastPausedActivity 等历史记录会造成“界面已打开”误判
+    foreach ($line in ($dump -split "`n")) {
+        if ($line -notmatch 'mResumedActivity|mFocusedActivity|mFocusedApp') { continue }
+        if ($line -match "$([regex]::Escape($Package))/\S*activities\.MainActivity") {
+            return $true
+        }
+    }
+    return $false
 }
 
 function Invoke-Status {
@@ -382,11 +472,14 @@ function Invoke-Status {
     } else {
         Write-Host '[status] 开机自启：未设置（默认关闭）'
     }
-    $vendorPid = ((Invoke-Adb shell ps) -join "`n") -match 'com\.phicomm\.speaker\.device'
-    if ($vendorPid) { Write-Host '[status] 厂商语音助手正在运行' }
+    if (Get-VendorProcessId) {
+        Write-Host '[status] 厂商语音助手正在运行（主进程）'
+    } else {
+        Write-Host '[status] 厂商语音助手未运行：唤醒词「小讯小讯」可能不可用，执行 stop 可恢复'
+    }
     Write-Host '[status] 最近日志：'
     (Get-AppLog 40) |
-        Where-Object { $_ -notmatch 'OTA 响应|Body=|Device-Id=|Client-Id=|WS Token|携带 Authorization|deviceId=|clientId=' } |
+        Where-Object { $_ -notmatch $SensitivePattern } |
         Select-Object -Last 15 |
         ForEach-Object { Write-Host "        $_" }
 }
@@ -394,6 +487,7 @@ function Invoke-Status {
 function Invoke-Uninstall {
     if (-not (Test-PackageInstalled)) {
         Write-Host '[uninstall] 设备上没有安装该应用，无需卸载。'
+        Restore-VendorAssistant
         return
     }
     if (Get-AppProcessId) {
@@ -405,6 +499,8 @@ function Invoke-Uninstall {
     Write-Host "        $result"
     if ($result -notmatch 'Success') { throw "卸载失败：$result" }
     Write-Host '[uninstall] 已卸载。'
+    # 卸载后同样恢复厂商助手，确保「小讯小讯」唤醒词可用
+    Restore-VendorAssistant
 }
 
 # ── 交互菜单（双击 .bat 时使用）──────────────────────────────────────────────
@@ -429,7 +525,7 @@ function Show-Menu {
     Write-Host '=============================================='
     Write-Host '   1. 安装应用            install（装完自动打开）'
     Write-Host '   2. 打开应用            start   （自动连接 + 开始对话）'
-    Write-Host '   3. 退出应用            stop    （释放麦克风）'
+    Write-Host '   3. 退出应用            stop    （释放麦克风 + 恢复唤醒词）'
     Write-Host '   4. 开机自启：开启      boot-on'
     Write-Host '   5. 开机自启：关闭      boot-off'
     Write-Host '   6. 查看状态            status'
@@ -471,6 +567,7 @@ function Start-MenuLoop {
 
 # ── 入口 ─────────────────────────────────────────────────────────────────────
 
+$exitCode = 0
 try {
     if ($Command -eq 'menu') {
         Start-MenuLoop
@@ -481,5 +578,14 @@ try {
     }
 } catch {
     Write-Host "[错误] $($_.Exception.Message)"
-    exit 1
+    $exitCode = 1
+} finally {
+    # 退出时断开设备并关闭 adb server，避免后台长期占用（-KeepAdbServer 可保留）
+    if ($Adb -and $script:LastDevice) {
+        try { & $Adb disconnect $script:LastDevice 2>&1 | Out-Null } catch { }
+        if (-not $KeepAdbServer) {
+            try { & $Adb kill-server 2>&1 | Out-Null } catch { }
+        }
+    }
 }
+if ($exitCode) { exit $exitCode }

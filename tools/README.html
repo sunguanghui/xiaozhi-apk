@@ -797,7 +797,7 @@ summary:focus-visible {
 ==============================================
    1. 安装应用            install（装完自动打开）
    2. 打开应用            start   （自动连接 + 开始对话）
-   3. 退出应用            stop    （释放麦克风）
+   3. 退出应用            stop    （释放麦克风 + 恢复唤醒词）
    4. 开机自启：开启      boot-on
    5. 开机自启：关闭      boot-off
    6. 查看状态            status
@@ -834,15 +834,16 @@ summary:focus-visible {
               <tr><td data-label="命令"><code>menu</code></td><td data-label="作用">交互菜单（默认）</td><td data-label="说明">不带参数运行脚本时进入；双击 <code>.bat</code> 即为此模式</td></tr>
               <tr><td data-label="命令"><code>install</code></td><td data-label="作用">安装并打开应用</td><td data-label="说明"><strong>先检查设备上是否已安装，已安装则先卸载再安装</strong>。卸载会清除应用数据（设置恢复默认），但绑定信息保存在服务端、按设备识别，<strong>重装后无需重新绑定</strong>；应用在运行时会先正常退出；APK 文件名不限；<strong>安装成功后自动打开应用</strong>（自动连接、进入语音对话）</td></tr>
               <tr><td data-label="命令"><code>start</code></td><td data-label="作用">打开应用</td><td data-label="说明">自动连接服务器、自动开始语音对话、占用麦克风；会先停掉厂商语音助手以释放麦克风</td></tr>
-              <tr><td data-label="命令"><code>stop</code></td><td data-label="作用">退出应用</td><td data-label="说明">断开连接、释放麦克风、结束进程；<strong>不修改开机自启设置</strong></td></tr>
+              <tr><td data-label="命令"><code>stop</code></td><td data-label="作用">退出应用</td><td data-label="说明">断开连接、释放麦克风、结束进程；<strong>不修改开机自启设置</strong>；退出后会重新启动厂商语音助手，恢复「小讯小讯」唤醒词（若厂商进程只是系统拉起的空壳，会先强制停止再启动）</td></tr>
               <tr><td data-label="命令"><code>boot-on</code></td><td data-label="作用">开启开机自启</td><td data-label="说明">盒子重启后自动打开应用</td></tr>
               <tr><td data-label="命令"><code>boot-off</code></td><td data-label="作用">关闭开机自启</td><td data-label="说明">盒子重启后不会自动打开应用</td></tr>
               <tr><td data-label="命令"><code>status</code></td><td data-label="作用">查看状态</td><td data-label="说明">应用是否在运行、界面是否打开、开机自启状态、厂商助手是否在运行、最近日志</td></tr>
-              <tr><td data-label="命令"><code>uninstall</code></td><td data-label="作用">卸载应用</td><td data-label="说明">先正常退出再卸载；<strong>应用数据（设置、本地配置）会一起清除</strong>，绑定信息在服务端，重新安装后仍然有效</td></tr>
+              <tr><td data-label="命令"><code>uninstall</code></td><td data-label="作用">卸载应用</td><td data-label="说明">先正常退出再卸载；<strong>应用数据（设置、本地配置）会一起清除</strong>，绑定信息在服务端，重新安装后仍然有效；卸载后会重新启动厂商语音助手，恢复「小讯小讯」唤醒词</td></tr>
             </tbody>
           </table>
         </div>
-        <p>可选参数：<code>-Device &lt;IP[:端口]&gt;</code>、<code>-Apk &lt;APK路径&gt;</code>、<code>-Adb &lt;adb.exe路径&gt;</code>。</p>
+        <p>可选参数：<code>-Device &lt;IP[:端口]&gt;</code>、<code>-Apk &lt;APK路径&gt;</code>、<code>-Adb &lt;adb.exe路径&gt;</code>、<code>-KeepAdbServer</code>。</p>
+        <p>脚本每次运行结束都会 <code>adb disconnect</code> 当前设备并关闭 adb server，避免后台长期占用；如果还要和其他 adb 工具（如 Android Studio）共用 server，加 <code>-KeepAdbServer</code> 只断开设备、不关闭 server。菜单模式在退出菜单时执行同样的清理。</p>
 
         <aside class="callout">
           <p class="callout-title">对话中语音退出</p>
@@ -868,7 +869,7 @@ summary:focus-visible {
           </li>
           <li>
             <h3>日常使用</h3>
-            <p>需要时 <code>start</code>，不需要时 <code>stop</code>——麦克风只在 <code>start</code> 期间被占用。</p>
+            <p>需要时 <code>start</code>，不需要时 <code>stop</code>——麦克风只在 <code>start</code> 期间被占用；<code>stop</code> 结束后会重新启动厂商语音助手，唤醒词「小讯小讯」保持可用。</p>
           </li>
           <li>
             <h3>升级应用</h3>
@@ -941,6 +942,13 @@ summary:focus-visible {
           <summary><code>start</code> 后没有反应 / 不说话</summary>
           <div class="faq-body">
             <p>先跑 <code>status</code> 看最近日志。常见原因：网络未就绪（应用会自动重试）、盒子还没绑定、厂商语音助手占着麦克风（脚本已自动 <code>force-stop</code> 它）。</p>
+          </div>
+        </details>
+
+        <details class="faq">
+          <summary>退出 / 卸载后「小讯小讯」唤醒词没反应</summary>
+          <div class="faq-body">
+            <p><code>stop</code> / <code>uninstall</code> 结束时会自动重新启动厂商语音助手（<code>.ui.MainActivity</code>），正常情况下唤醒词会恢复。打开小智期间厂商助手被 <code>force-stop</code> 是正常的；如果退出后仍无反应，先跑 <code>status</code> 看是否显示“厂商语音助手正在运行（主进程）”，没有再执行一次 <code>stop</code>（会强制重启厂商助手），仍不行再重启盒子。</p>
           </div>
         </details>
 
